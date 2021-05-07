@@ -14,6 +14,8 @@ use super::{from_item::*, FromItem};
 pub struct SelectQuery {
     exprs: Vec<Box<dyn Expr>>,
     from: Option<Box<dyn FromItem>>,
+    conds: Vec<Box<dyn Expr>>,
+    distinct: Option<DistinctMode>,
 }
 
 impl SelectQuery {
@@ -89,6 +91,19 @@ impl SelectQuery {
         }) as Box<dyn FromItem>);
         self
     }
+
+    pub fn and_where<E>(mut self, cond: E) -> Self
+    where
+        E: Expr + 'static,
+    {
+        self.conds.push(Box::new(cond));
+        self
+    }
+
+    pub fn distinct(mut self) -> Self {
+        self.distinct = Some(DistinctMode::Distinct);
+        self
+    }
 }
 
 impl Collectable for SelectQuery {
@@ -98,6 +113,10 @@ impl Collectable for SelectQuery {
 
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         w.write_str("SELECT ")?;
+
+        if Some(DistinctMode::Distinct) == self.distinct {
+            w.write_str("DISTINCT ")?;
+        }
 
         let mut exprs = self.exprs.iter();
 
@@ -115,6 +134,31 @@ impl Collectable for SelectQuery {
             from.collect(w, t)?;
         }
 
+        // write WHERE conditions
+        let mut conds = self.conds.iter();
+        let mut where_wrapped = false;
+        if let Some(cond) = conds.next() {
+            w.write_str(" WHERE ")?;
+            where_wrapped = self.conds.len() > 1;
+            if where_wrapped {
+                w.write_char('(')?;
+            }
+            cond._collect(w, t)?;
+        }
+        for cond in conds {
+            w.write_str(" AND ")?;
+            cond._collect(w, t)?;
+        }
+        if where_wrapped {
+            w.write_char(')')?;
+        }
+
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DistinctMode {
+    All,
+    Distinct,
 }

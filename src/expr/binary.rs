@@ -111,8 +111,8 @@ pub trait BinaryExt: Expr + Sized {
 impl<T> BinaryExt for T where T: Expr {}
 
 pub struct BinaryExpr<Lhs, Rhs> {
-    pub lhs: Lhs,
-    pub rhs: Rhs,
+    lhs: Lhs,
+    rhs: Rhs,
     op: BinaryOp,
 }
 

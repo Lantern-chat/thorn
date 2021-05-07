@@ -34,9 +34,9 @@ pub trait BetweenExt: Expr + Sized {
 impl<T> BetweenExt for T where T: Expr {}
 
 pub struct BetweenExpr<X, A, B> {
-    pub x: X,
-    pub a: A,
-    pub b: B,
+    x: X,
+    a: A,
+    b: B,
     op: BetweenOp,
 }
 

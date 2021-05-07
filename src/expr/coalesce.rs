@@ -1,7 +1,7 @@
 use super::*;
 
 pub struct CoalesceExpr {
-    pub exprs: Vec<Box<dyn Expr>>,
+    exprs: Vec<Box<dyn Expr>>,
 }
 
 impl CoalesceExpr {

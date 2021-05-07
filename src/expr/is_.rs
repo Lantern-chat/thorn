@@ -1,7 +1,7 @@
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum IsOp {
+enum IsOp {
     IsNull,
     IsNotNull,
     IsTrue,
@@ -51,8 +51,8 @@ pub trait IsExt: Expr + Sized {
 impl<T> IsExt for T where T: Expr {}
 
 pub struct IsExpr<V> {
-    pub value: V,
-    pub op: IsOp,
+    value: V,
+    op: IsOp,
 }
 
 impl<V: Expr> Expr for IsExpr<V> {}

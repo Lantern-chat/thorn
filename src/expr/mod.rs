@@ -16,11 +16,13 @@ use crate::{
 const _: Option<&dyn Expr> = None;
 pub trait Expr: Collectable {}
 
+pub mod as_;
 pub mod between;
 pub mod binary;
 pub mod coalesce;
 pub mod is_;
 pub mod literal;
+pub mod unary;
 
 pub use self::{
     between::{BetweenExpr, BetweenExt},
@@ -28,14 +30,15 @@ pub use self::{
     coalesce::{CoalesceExpr, CoalesceExt},
     is_::{IsExpr, IsExt},
     literal::Literal,
+    unary::{UnaryExpr, UnaryExt},
 };
 
 pub type Var = PlaceholderExpr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlaceholderExpr {
-    pub ty: Type,
-    pub idx: Option<usize>,
+    ty: Type,
+    idx: Option<usize>,
 }
 
 impl PlaceholderExpr {
@@ -80,8 +83,8 @@ where
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Subscript<E, I> {
-    pub inner: E,
-    pub index: I,
+    inner: E,
+    index: I,
 }
 
 impl<E: Expr, I: Expr> Expr for Subscript<E, I> {}
@@ -95,8 +98,8 @@ impl<E: Expr, I: Expr> Collectable for Subscript<E, I> {
 }
 
 pub struct Field<E, N> {
-    pub inner: E,
-    pub field: N,
+    inner: E,
+    field: N,
 }
 
 // TODO: Other strongly-typed named fields?
@@ -111,45 +114,9 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum UnaryOp {
-    Not,
-    BitNot,
-    Abs,
-    SquareRoot,
-    CubeRoot,
-}
-
-pub struct UnaryExpr<V> {
-    pub value: V,
-    pub op: UnaryOp,
-}
-
-impl<V> Expr for UnaryExpr<V> where V: Expr {}
-impl<V> Collectable for UnaryExpr<V>
-where
-    V: Expr,
-{
-    fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
-        w.write_str(match self.op {
-            UnaryOp::Not => "!",
-            UnaryOp::BitNot => "~",
-            UnaryOp::Abs => "@",
-            UnaryOp::SquareRoot => "|/",
-            UnaryOp::CubeRoot => "||/",
-        })?;
-
-        self.value._collect(w, t)
-    }
-
-    fn needs_wrapping(&self) -> bool {
-        true
-    }
-}
-
 pub struct CastExpr<T> {
-    pub inner: T,
-    pub into: Type,
+    inner: T,
+    into: Type,
 }
 
 pub trait CastExt: Expr + Sized {
@@ -168,5 +135,49 @@ where
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         self.inner._collect(w, t)?;
         write!(w, "::{}", self.into.name())
+    }
+}
+
+pub struct LikeExpr<E> {
+    inner: E,
+    not: bool,
+    similar: bool,
+    pattern: Literal,
+}
+
+#[rustfmt::skip]
+pub trait LikeExt: Expr + Sized {
+    fn like(self, pattern: &'static str) -> LikeExpr<Self> {
+        LikeExpr { inner: self, not: false, similar: false, pattern: Literal::TextStr(pattern) }
+    }
+    fn not_like(self, pattern: &'static str) -> LikeExpr<Self> {
+        LikeExpr { inner: self, not: true, similar: false, pattern: Literal::TextStr(pattern) }
+    }
+    fn similar_to(self, pattern: &'static str) -> LikeExpr<Self> {
+        LikeExpr { inner: self, not: false, similar: true, pattern: Literal::TextStr(pattern) }
+    }
+    fn not_similar_to(self, pattern: &'static str) -> LikeExpr<Self> {
+        LikeExpr { inner: self, not: true, similar: true, pattern: Literal::TextStr(pattern) }
+    }
+}
+impl<T> LikeExt for T where T: Expr {}
+
+impl<E: Expr> Expr for LikeExpr<E> {}
+impl<E: Expr> Collectable for LikeExpr<E> {
+    fn needs_wrapping(&self) -> bool {
+        true
+    }
+
+    fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
+        self.inner._collect(w, t)?;
+
+        w.write_str(match (self.similar, self.not) {
+            (false, false) => " LIKE ",
+            (false, true) => " NOT LIKE ",
+            (true, false) => " SIMILAR TO ",
+            (true, true) => " NOT SIMILAR TO ",
+        })?;
+
+        self.pattern._collect(w, t)
     }
 }
