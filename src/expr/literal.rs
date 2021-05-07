@@ -39,8 +39,25 @@ impl Collectable for Literal {
             Literal::Int8(v) => write!(w, "{}", v),
             Literal::Float4(v) => write!(w, "{}", v),
             Literal::Float8(v) => write!(w, "{}", v),
-            Literal::TextStr(v) => write!(w, "\"{}\"", v),
-            Literal::TextString(ref v) => write!(w, "\"{}\"", v),
+            Literal::TextStr(v) => write_escaped_string_quoted(v, w),
+            Literal::TextString(ref v) => write_escaped_string_quoted(&v, w),
         }
     }
+}
+
+fn write_escaped_string_quoted(string: &str, w: &mut dyn Write) -> fmt::Result {
+    let escaped = string
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("'", "\\'")
+        .replace("\0", "\\0")
+        .replace("\x08", "\\b")
+        .replace("\x09", "\\t")
+        .replace("\x1a", "\\z")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r");
+
+    w.write_str(if escaped.find('\\').is_some() { "E'" } else { "'" })?;
+    w.write_str(&escaped)?;
+    w.write_char('\'')
 }
