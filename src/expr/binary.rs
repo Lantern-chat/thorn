@@ -22,6 +22,8 @@ enum BinaryOp {
     IsDistinctFrom,
     IsNotDistinctFrom,
     Concat,
+    LogicalAnd,
+    LogicalOr,
 }
 
 #[rustfmt::skip]
@@ -106,6 +108,14 @@ pub trait BinaryExt: Expr + Sized {
     fn concat<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
         BinaryExpr { lhs: self, rhs, op: BinaryOp::Concat }
     }
+    #[inline]
+    fn and<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
+        BinaryExpr { lhs: self, rhs, op: BinaryOp::LogicalAnd }
+    }
+    #[inline]
+    fn or<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
+        BinaryExpr { lhs: self, rhs, op: BinaryOp::LogicalOr }
+    }
 }
 
 impl<T> BinaryExt for T where T: Expr {}
@@ -125,7 +135,7 @@ impl<Lhs: Expr, Rhs: Expr> Collectable for BinaryExpr<Lhs, Rhs> {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         self.lhs._collect(w, t)?;
 
-        w.write_char(' ')?;
+        w.write_str(" ")?;
         w.write_str(match self.op {
             BinaryOp::LessThan => "<",
             BinaryOp::GreaterThan => ">",
@@ -147,9 +157,11 @@ impl<Lhs: Expr, Rhs: Expr> Collectable for BinaryExpr<Lhs, Rhs> {
             BinaryOp::IsDistinctFrom => "IS DISTINCT FROM",
             BinaryOp::IsNotDistinctFrom => "IS NOT DISTINCT FROM",
             BinaryOp::Concat => "||",
+            BinaryOp::LogicalAnd => "AND",
+            BinaryOp::LogicalOr => "OR",
         })?;
 
-        w.write_char(' ')?;
+        w.write_str(" ")?;
         self.rhs._collect(w, t)
     }
 }

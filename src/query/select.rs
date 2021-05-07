@@ -1,5 +1,6 @@
 use crate::{
     collect::{Collectable, Collector},
+    order::Order,
     *,
 };
 
@@ -16,9 +17,18 @@ pub struct SelectQuery {
     from: Option<Box<dyn FromItem>>,
     conds: Vec<Box<dyn Expr>>,
     distinct: Option<DistinctMode>,
+    having: Vec<Box<dyn Expr>>,
+    limit: Option<Box<dyn Expr>>,
+    offset: Option<Box<dyn Expr>>,
+    order_by: Option<(Order, Box<dyn Expr>)>,
 }
 
 impl SelectQuery {
+    pub fn distinct(mut self) -> Self {
+        self.distinct = Some(DistinctMode::Distinct);
+        self
+    }
+
     pub fn col<C>(self, column: C) -> Self
     where
         C: Table,
@@ -100,8 +110,45 @@ impl SelectQuery {
         self
     }
 
-    pub fn distinct(mut self) -> Self {
-        self.distinct = Some(DistinctMode::Distinct);
+    pub fn limit<E>(mut self, expr: E) -> Self
+    where
+        E: Expr + 'static,
+    {
+        self.limit = Some(Box::new(expr));
+        self
+    }
+
+    pub fn limit_n(mut self, limit: i64) -> Self {
+        self.limit = Some(Box::new(Literal::Int8(limit)));
+        self
+    }
+
+    pub fn having<E>(mut self, cond: E) -> Self
+    where
+        E: Expr + 'static,
+    {
+        self.having.push(Box::new(cond));
+        self
+    }
+
+    pub fn offset<E>(mut self, start: E) -> Self
+    where
+        E: Expr + 'static,
+    {
+        self.offset = Some(Box::new(start));
+        self
+    }
+
+    pub fn offset_n(mut self, start: i64) -> Self {
+        self.offset = Some(Box::new(Literal::Int8(start)));
+        self
+    }
+
+    pub fn order_by<E>(mut self, expr: OrderExpr<E>) -> Self
+    where
+        E: Expr + 'static,
+    {
+        self.order_by = Some((expr.order, Box::new(expr.inner)));
         self
     }
 }
@@ -118,30 +165,30 @@ impl Collectable for SelectQuery {
             w.write_str("DISTINCT ")?;
         }
 
+        // SELECT EXPRESSIONS
         let mut exprs = self.exprs.iter();
-
         if let Some(e) = exprs.next() {
             e._collect(w, t)?;
         }
-
         for e in exprs {
             w.write_str(", ")?;
             e._collect(w, t)?;
         }
 
+        // FROM
         if let Some(ref from) = self.from {
             w.write_str(" FROM ")?;
             from.collect(w, t)?;
         }
 
-        // write WHERE conditions
+        // WHERE
         let mut conds = self.conds.iter();
         let mut where_wrapped = false;
         if let Some(cond) = conds.next() {
             w.write_str(" WHERE ")?;
             where_wrapped = self.conds.len() > 1;
             if where_wrapped {
-                w.write_char('(')?;
+                w.write_str("(")?;
             }
             cond._collect(w, t)?;
         }
@@ -150,7 +197,43 @@ impl Collectable for SelectQuery {
             cond._collect(w, t)?;
         }
         if where_wrapped {
-            w.write_char(')')?;
+            w.write_str(")")?;
+        }
+
+        // HAVING
+        let mut conds = self.having.iter();
+        let mut having_wrapped = false;
+        if let Some(cond) = conds.next() {
+            w.write_str(" HAVING ")?;
+            having_wrapped = self.having.len() > 1;
+            if having_wrapped {
+                w.write_str("(")?;
+            }
+            cond._collect(w, t)?;
+        }
+        for cond in conds {
+            w.write_str(" AND ")?;
+            cond._collect(w, t)?;
+        }
+        if having_wrapped {
+            w.write_str(")")?;
+        }
+
+        if let Some((order, ref inner)) = self.order_by {
+            w.write_str(" ORDER BY ")?;
+            OrderExpr { order, inner }._collect(w, t)?; // reconstruct and collect
+        }
+
+        // LIMIT
+        if let Some(ref limit) = self.limit {
+            w.write_str(" LIMIT ")?;
+            limit._collect(w, t)?;
+        }
+
+        // OFFSET
+        if let Some(ref offset) = self.offset {
+            w.write_str(" OFFSET ")?;
+            offset._collect(w, t)?;
         }
 
         Ok(())

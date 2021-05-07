@@ -48,7 +48,14 @@ mod test {
             )
             .join_left_table_on::<Users, _>(TestTable::UserName.equals(Users::UserName))
             .and_where(Users::Id.equals(Var::of(Type::INT8)))
-            .and_where(Users::UserName.equals(Var::of(Type::TEXT)))
+            .and_where(
+                Users::UserName
+                    .equals(Var::of(Type::TEXT))
+                    .or(Users::UserName.like("%Test%")),
+            )
+            .limit_n(10)
+            .offset_n(1)
+            .order_by(TestTable::Id.ascending().nulls_first())
             .and_where(Users::UserName.like("%Test%"))
             .to_string();
 

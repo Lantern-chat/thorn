@@ -51,9 +51,9 @@ pub trait Collectable {
 
     fn _collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         if self.needs_wrapping() {
-            w.write_char('(')?;
+            w.write_str("(")?;
             self.collect(w, t)?;
-            w.write_char(')')
+            w.write_str(")")
         } else {
             self.collect(w, t)
         }

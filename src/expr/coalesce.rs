@@ -44,6 +44,6 @@ impl Collectable for CoalesceExpr {
             e.collect(w, t)?;
         }
 
-        w.write_char(')')
+        w.write_str(")")
     }
 }

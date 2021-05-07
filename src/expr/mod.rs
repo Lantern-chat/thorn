@@ -3,6 +3,7 @@
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     fmt::{self, Write},
+    ops::Deref,
 };
 
 use pg::Type;
@@ -16,12 +17,20 @@ use crate::{
 const _: Option<&dyn Expr> = None;
 pub trait Expr: Collectable {}
 
+impl<T> Expr for T
+where
+    T: Deref,
+    <T as Deref>::Target: Expr,
+{
+}
+
 pub mod as_;
 pub mod between;
 pub mod binary;
 pub mod coalesce;
 pub mod is_;
 pub mod literal;
+pub mod order;
 pub mod unary;
 
 pub use self::{
@@ -30,6 +39,7 @@ pub use self::{
     coalesce::{CoalesceExpr, CoalesceExt},
     is_::{IsExpr, IsExt},
     literal::Literal,
+    order::{OrderExpr, OrderExt},
     unary::{UnaryExpr, UnaryExt},
 };
 
@@ -91,9 +101,9 @@ impl<E: Expr, I: Expr> Expr for Subscript<E, I> {}
 impl<E: Expr, I: Expr> Collectable for Subscript<E, I> {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         self.inner._collect(w, t)?;
-        w.write_char('[')?;
+        w.write_str("[")?;
         self.index.collect(w, t)?; // already enclosed by delimiters, so wrapping is unnecessary
-        w.write_char(']')
+        w.write_str("]")
     }
 }
 
