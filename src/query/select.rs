@@ -4,28 +4,35 @@ use crate::{
     *,
 };
 
-use std::{
-    fmt::{self, Write},
-    marker::PhantomData,
-};
+use std::fmt::{self, Write};
 
 use super::{from_item::*, FromItem};
 
 #[derive(Default)]
 pub struct SelectQuery {
+    on: Vec<Box<dyn Expr>>,
     exprs: Vec<Box<dyn Expr>>,
     from: Option<Box<dyn FromItem>>,
-    conds: Vec<Box<dyn Expr>>,
+    wheres: Vec<Box<dyn Expr>>,
+    //groups: Vec<Box<dyn Expr>>, // TODO
     distinct: Option<DistinctMode>,
     having: Vec<Box<dyn Expr>>,
     limit: Option<Box<dyn Expr>>,
     offset: Option<Box<dyn Expr>>,
-    order_by: Option<(Order, Box<dyn Expr>)>,
+    orders: Vec<(Order, Box<dyn Expr>)>,
 }
 
 impl SelectQuery {
     pub fn distinct(mut self) -> Self {
         self.distinct = Some(DistinctMode::Distinct);
+        self
+    }
+
+    pub fn on<E>(mut self, expr: E) -> Self
+    where
+        E: Expr + 'static,
+    {
+        self.on.push(Box::new(expr));
         self
     }
 
@@ -106,7 +113,7 @@ impl SelectQuery {
     where
         E: Expr + 'static,
     {
-        self.conds.push(Box::new(cond));
+        self.wheres.push(Box::new(cond));
         self
     }
 
@@ -148,7 +155,7 @@ impl SelectQuery {
     where
         E: Expr + 'static,
     {
-        self.order_by = Some((expr.order, Box::new(expr.inner)));
+        self.orders.push((expr.order, Box::new(expr.inner)));
         self
     }
 }
@@ -163,6 +170,20 @@ impl Collectable for SelectQuery {
 
         if Some(DistinctMode::Distinct) == self.distinct {
             w.write_str("DISTINCT ")?;
+
+            // DISTINCT ON
+            let mut ons = self.on.iter();
+            if let Some(expr) = ons.next() {
+                w.write_str("ON (")?;
+                expr._collect(w, t)?;
+            }
+            for expr in ons {
+                w.write_str(", ")?;
+                expr._collect(w, t)?;
+            }
+            if !self.on.is_empty() {
+                w.write_str(")")?;
+            }
         }
 
         // SELECT EXPRESSIONS
@@ -182,17 +203,17 @@ impl Collectable for SelectQuery {
         }
 
         // WHERE
-        let mut conds = self.conds.iter();
+        let mut wheres = self.wheres.iter();
         let mut where_wrapped = false;
-        if let Some(cond) = conds.next() {
+        if let Some(cond) = wheres.next() {
             w.write_str(" WHERE ")?;
-            where_wrapped = self.conds.len() > 1;
+            where_wrapped = self.wheres.len() > 1;
             if where_wrapped {
                 w.write_str("(")?;
             }
             cond._collect(w, t)?;
         }
-        for cond in conds {
+        for cond in wheres {
             w.write_str(" AND ")?;
             cond._collect(w, t)?;
         }
@@ -219,9 +240,15 @@ impl Collectable for SelectQuery {
             w.write_str(")")?;
         }
 
-        if let Some((order, ref inner)) = self.order_by {
+        let mut orders = self.orders.iter();
+        if let Some((order, ref inner)) = orders.next() {
             w.write_str(" ORDER BY ")?;
-            OrderExpr { order, inner }._collect(w, t)?; // reconstruct and collect
+            OrderExpr { order: *order, inner }._collect(w, t)?; // reconstruct and collect
+        }
+
+        for (order, ref inner) in orders {
+            w.write_str(", ")?;
+            OrderExpr { order: *order, inner }._collect(w, t)?; // reconstruct and collect
         }
 
         // LIMIT

@@ -53,9 +53,11 @@ mod test {
                     .equals(Var::of(Type::TEXT))
                     .or(Users::UserName.like("%Test%")),
             )
+            .and_where(Users::Id.less_than(Builtin::Max.call().arg(Users::Id)))
             .limit_n(10)
             .offset_n(1)
             .order_by(TestTable::Id.ascending().nulls_first())
+            .order_by(TestTable::UserName.descending())
             .and_where(Users::UserName.like("%Test%"))
             .to_string();
 

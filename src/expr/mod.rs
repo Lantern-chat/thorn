@@ -28,6 +28,7 @@ pub mod as_;
 pub mod between;
 pub mod binary;
 pub mod coalesce;
+pub mod func;
 pub mod is_;
 pub mod literal;
 pub mod order;
@@ -37,6 +38,7 @@ pub use self::{
     between::{BetweenExpr, BetweenExt},
     binary::{BinaryExpr, BinaryExt},
     coalesce::{CoalesceExpr, CoalesceExt},
+    func::{Builtin, Call},
     is_::{IsExpr, IsExt},
     literal::Literal,
     order::{OrderExpr, OrderExt},
