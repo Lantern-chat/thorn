@@ -21,7 +21,7 @@ pub trait Table: Sized + 'static {
 
 #[macro_export]
 macro_rules! table {
-    ($(#[$meta:meta])* $struct_vis:vis enum $table:ident $(in $schema:ident)? {$(
+    ($(#[$meta:meta])* $struct_vis:vis struct $table:ident $(in $schema:ident)? {$(
         $field_name:ident: $ty:expr
     ),*$(,)?}) => {
         $(#[$meta])*
@@ -65,7 +65,7 @@ use pg::Type;
 
 table! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub enum TestTable in TestSchema {
+    pub struct TestTable in TestSchema {
         Id: Type::INT8,
         UserName: Type::VARCHAR,
     }

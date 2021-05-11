@@ -24,7 +24,7 @@ mod test {
     use table::TestTable;
 
     table! {
-        pub enum Users in MySchema {
+        pub struct Users in MySchema {
             Id: Type::INT8,
             UserName: Type::VARCHAR,
         }
