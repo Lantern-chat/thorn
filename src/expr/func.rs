@@ -1,10 +1,22 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Builtin {
-    Min,
-    Max,
-    Sum,
+macro_rules! decl_builtins {
+    ($($name:ident),*$(,)*) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum Builtin {
+            $($name),*
+        }
+
+        impl Builtin {
+            pub fn name(self) -> &'static str {
+                paste::paste! {
+                    match self {
+                        $(Builtin::$name => stringify!([<$name:snake:upper>])),*
+                    }
+                }
+            }
+        }
+    }
 }
 
 enum CallName {
@@ -25,12 +37,11 @@ impl Builtin {
         }
     }
 
-    fn to_str(self) -> &'static str {
-        match self {
-            Builtin::Min => "MIN",
-            Builtin::Max => "MAX",
-            Builtin::Sum => "SUM",
-        }
+    pub fn arg<E>(self, arg: E) -> Call
+    where
+        E: Expr + 'static,
+    {
+        self.call().arg(arg)
     }
 }
 
@@ -64,7 +75,7 @@ impl Expr for Call {}
 impl Collectable for Call {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         let name = match self.name {
-            CallName::Builtin(b) => b.to_str(),
+            CallName::Builtin(b) => b.name(),
             CallName::Custom(name) => name,
         };
         write!(w, "{}(", name)?;
@@ -80,4 +91,111 @@ impl Collectable for Call {
 
         w.write_str(")")
     }
+}
+
+decl_builtins! {
+    Abs,
+    Sqrt,
+    Cbrt,
+    Degrees,
+    Radians,
+    Div,
+    Exp,
+    Ceil,
+    Floor,
+    Round,
+    Ln,
+    Log,
+    Log10,
+    Mod,
+    Pi,
+    Power,
+    Sign,
+    Trunc,
+    Factorial,
+    Gcd,
+    Lcm,
+    WidthBucket,
+    Random,
+    Setseed,
+    MinScale,
+
+    Sin,
+    Cos,
+    Tan,
+    Cot,
+    Acos,
+    Asin,
+    Atan,
+    Atan2,
+
+    Sinh,
+    Cosh,
+    Tanh,
+    Asinh,
+    Acosh,
+    Atanh,
+
+    Concat,
+    CharLength,
+    Length,
+    Lower,
+    Upper,
+    Left,
+    Right,
+    Lpad,
+    Ltrim,
+    Rpad,
+    Rtrim,
+    StartsWith,
+    SplitPart,
+    ToAscii,
+    Chr,
+    Ascii,
+    Btrim,
+    Encode,
+    Decode,
+    Md5,
+    Translate,
+
+    OctetLength,
+    BitLength,
+    GetBit,
+    GetByte,
+    SetBit,
+    SetByte,
+    Sha224,
+    Sha256,
+    Sha384,
+    Sha512,
+    Substr,
+
+    ToChar,
+    ToDate,
+    ToNumber,
+    ToTimestamp,
+
+    Now,
+    ClockTimestamp,
+    CurrentDate,
+    CurrentTime,
+    CurrentTimestamp,
+
+    Sum,
+    Min,
+    Max,
+    Avg,
+    Stddev,
+    StddevPop,
+    StddevSamp,
+    Variance,
+    VarPop,
+    VarSamp,
+
+    BitAnd,
+    BitOr,
+    BoolAnd,
+    BoolOr,
+    Every,
+    Count,
 }

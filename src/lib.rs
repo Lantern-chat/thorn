@@ -36,8 +36,9 @@ mod test {
             .distinct()
             .from_table::<TestTable>()
             .cols(vec![TestTable::Id, TestTable::UserName])
-            .col(Users::Id)
+            .expr(Users::Id.cast(Type::INT8))
             .expr(TestTable::UserName.coalesce(Users::UserName))
+            .expr(Builtin::Count.arg(Any))
             .expr(
                 Var::of(Type::INT4)
                     .neg()
@@ -53,12 +54,20 @@ mod test {
                     .equals(Var::of(Type::TEXT))
                     .or(Users::UserName.like("%Test%")),
             )
-            .and_where(Users::Id.less_than(Builtin::Max.call().arg(Users::Id)))
+            .and_where(Users::Id.less_than(Builtin::OctetLength.arg(Users::Id)))
             .limit_n(10)
             .offset_n(1)
             .order_by(TestTable::Id.ascending().nulls_first())
             .order_by(TestTable::UserName.descending())
             .and_where(Users::UserName.like("%Test%"))
+            .and_where(Query::select().expr(Var::of(Type::TEXT)).exists())
+            .and_where(
+                Query::select()
+                    .col(Users::Id)
+                    .from_table::<Users>()
+                    .any()
+                    .less_than(Var::of(Type::INT4)),
+            )
             .to_string();
 
         println!("{}", s.0);

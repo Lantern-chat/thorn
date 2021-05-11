@@ -151,11 +151,11 @@ impl SelectQuery {
         self
     }
 
-    pub fn order_by<E>(mut self, expr: OrderExpr<E>) -> Self
+    pub fn order_by<E>(mut self, order: OrderExpr<E>) -> Self
     where
         E: Expr + 'static,
     {
-        self.orders.push((expr.order, Box::new(expr.inner)));
+        self.orders.push((order.order, Box::new(order.inner)));
         self
     }
 }
@@ -186,14 +186,14 @@ impl Collectable for SelectQuery {
             }
         }
 
-        // SELECT EXPRESSIONS
+        // SELECT [expressions [, ...]]
         let mut exprs = self.exprs.iter();
         if let Some(e) = exprs.next() {
             e._collect(w, t)?;
-        }
-        for e in exprs {
-            w.write_str(", ")?;
-            e._collect(w, t)?;
+            for e in exprs {
+                w.write_str(", ")?;
+                e._collect(w, t)?;
+            }
         }
 
         // FROM
@@ -204,51 +204,49 @@ impl Collectable for SelectQuery {
 
         // WHERE
         let mut wheres = self.wheres.iter();
-        let mut where_wrapped = false;
         if let Some(cond) = wheres.next() {
             w.write_str(" WHERE ")?;
-            where_wrapped = self.wheres.len() > 1;
+            let where_wrapped = self.wheres.len() > 1;
             if where_wrapped {
                 w.write_str("(")?;
             }
             cond._collect(w, t)?;
-        }
-        for cond in wheres {
-            w.write_str(" AND ")?;
-            cond._collect(w, t)?;
-        }
-        if where_wrapped {
-            w.write_str(")")?;
+            for cond in wheres {
+                w.write_str(" AND ")?;
+                cond._collect(w, t)?;
+            }
+            if where_wrapped {
+                w.write_str(")")?;
+            }
         }
 
         // HAVING
         let mut conds = self.having.iter();
-        let mut having_wrapped = false;
         if let Some(cond) = conds.next() {
             w.write_str(" HAVING ")?;
-            having_wrapped = self.having.len() > 1;
+            let having_wrapped = self.having.len() > 1;
             if having_wrapped {
                 w.write_str("(")?;
             }
             cond._collect(w, t)?;
-        }
-        for cond in conds {
-            w.write_str(" AND ")?;
-            cond._collect(w, t)?;
-        }
-        if having_wrapped {
-            w.write_str(")")?;
+            for cond in conds {
+                w.write_str(" AND ")?;
+                cond._collect(w, t)?;
+            }
+            if having_wrapped {
+                w.write_str(")")?;
+            }
         }
 
         let mut orders = self.orders.iter();
         if let Some((order, ref inner)) = orders.next() {
             w.write_str(" ORDER BY ")?;
             OrderExpr { order: *order, inner }._collect(w, t)?; // reconstruct and collect
-        }
 
-        for (order, ref inner) in orders {
-            w.write_str(", ")?;
-            OrderExpr { order: *order, inner }._collect(w, t)?; // reconstruct and collect
+            for (order, ref inner) in orders {
+                w.write_str(", ")?;
+                OrderExpr { order: *order, inner }._collect(w, t)?; // reconstruct and collect
+            }
         }
 
         // LIMIT

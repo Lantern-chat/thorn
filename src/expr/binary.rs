@@ -2,12 +2,6 @@ use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum BinaryOp {
-    LessThan,
-    GreaterThan,
-    LessThanEqual,
-    GreaterThanEqual,
-    Equal,
-    NotEqual,
     Add,
     Sub,
     Mul,
@@ -28,30 +22,6 @@ enum BinaryOp {
 
 #[rustfmt::skip]
 pub trait BinaryExt: Expr + Sized {
-    #[inline]
-    fn less_than<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
-        BinaryExpr { lhs: self, rhs, op: BinaryOp::LessThan }
-    }
-    #[inline]
-    fn greater_than<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
-        BinaryExpr { lhs: self, rhs, op: BinaryOp::GreaterThan }
-    }
-    #[inline]
-    fn less_than_equal<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
-        BinaryExpr { lhs: self, rhs, op: BinaryOp::LessThanEqual }
-    }
-    #[inline]
-    fn greater_than_equal<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
-        BinaryExpr { lhs: self, rhs, op: BinaryOp::GreaterThanEqual }
-    }
-    #[inline]
-    fn equals<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
-        BinaryExpr { lhs: self, rhs, op: BinaryOp::Equal }
-    }
-    #[inline]
-    fn not_equals<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
-        BinaryExpr { lhs: self, rhs, op: BinaryOp::NotEqual }
-    }
     #[inline]
     fn add<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
         BinaryExpr { lhs: self, rhs, op: BinaryOp::Add }
@@ -137,12 +107,6 @@ impl<Lhs: Expr, Rhs: Expr> Collectable for BinaryExpr<Lhs, Rhs> {
 
         w.write_str(" ")?;
         w.write_str(match self.op {
-            BinaryOp::LessThan => "<",
-            BinaryOp::GreaterThan => ">",
-            BinaryOp::LessThanEqual => "<=",
-            BinaryOp::GreaterThanEqual => ">=",
-            BinaryOp::Equal => "=",
-            BinaryOp::NotEqual => "<>",
             BinaryOp::Add => "+",
             BinaryOp::Sub => "-",
             BinaryOp::Mul => "*",
