@@ -7,7 +7,7 @@ enum BinaryOp {
     Mul,
     Div,
     Rem,
-    Exp,
+    Power,
     BitAnd,
     BitOr,
     BitXor,
@@ -43,8 +43,8 @@ pub trait BinaryExt: Expr + Sized {
         BinaryExpr { lhs: self, rhs, op: BinaryOp::Rem }
     }
     #[inline]
-    fn exp<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
-        BinaryExpr { lhs: self, rhs, op: BinaryOp::Exp }
+    fn power<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
+        BinaryExpr { lhs: self, rhs, op: BinaryOp::Power }
     }
     #[inline]
     fn bit_and<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
@@ -112,7 +112,7 @@ impl<Lhs: Expr, Rhs: Expr> Collectable for BinaryExpr<Lhs, Rhs> {
             BinaryOp::Mul => "*",
             BinaryOp::Div => "/",
             BinaryOp::Rem => "%",
-            BinaryOp::Exp => "^",
+            BinaryOp::Power => "^",
             BinaryOp::BitAnd => "&",
             BinaryOp::BitOr => "|",
             BinaryOp::BitXor => "#",

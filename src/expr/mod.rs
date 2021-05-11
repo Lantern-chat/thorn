@@ -27,12 +27,10 @@ where
 pub mod as_;
 pub mod between;
 pub mod binary;
-pub mod coalesce;
 pub mod comparison;
 pub mod func;
 pub mod is_;
 pub mod literal;
-pub mod null_if;
 pub mod order;
 pub mod subquery;
 pub mod unary;
@@ -40,9 +38,8 @@ pub mod unary;
 pub use self::{
     between::{BetweenExpr, BetweenExt},
     binary::{BinaryExpr, BinaryExt},
-    coalesce::{CoalesceExpr, CoalesceExt},
     comparison::{CompExpr, CompExt},
-    func::{Builtin, Call},
+    func::{Arguments, Builtin, Call},
     is_::{IsExpr, IsExt},
     literal::Literal,
     order::{OrderExpr, OrderExt},

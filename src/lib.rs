@@ -37,8 +37,8 @@ mod test {
             .from_table::<TestTable>()
             .cols(vec![TestTable::Id, TestTable::UserName])
             .expr(Users::Id.cast(Type::INT8))
-            .expr(TestTable::UserName.coalesce(Users::UserName))
-            .expr(Builtin::Count.arg(Any))
+            .expr(Builtin::coalesce((TestTable::UserName, Users::UserName)))
+            .expr(Builtin::count(Any))
             .expr(
                 Var::of(Type::INT4)
                     .neg()

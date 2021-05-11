@@ -1,7 +1,7 @@
 use super::*;
 
 macro_rules! decl_builtins {
-    ($($name:ident),*$(,)*) => {
+    ($($name:ident),*$(,)*) => {paste::paste! {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum Builtin {
             $($name),*
@@ -9,14 +9,18 @@ macro_rules! decl_builtins {
 
         impl Builtin {
             pub fn name(self) -> &'static str {
-                paste::paste! {
-                    match self {
-                        $(Builtin::$name => stringify!([<$name:snake:upper>])),*
-                    }
+                match self {
+                    $(Builtin::$name => stringify!([<$name:snake:upper>])),*
                 }
             }
+
+            $(
+                pub fn [<$name:snake>]<T>(args: T) -> Call where T: Arguments {
+                    Builtin::$name.args(args)
+                }
+            )*
         }
-    }
+    }}
 }
 
 enum CallName {
@@ -43,6 +47,17 @@ impl Builtin {
     {
         self.call().arg(arg)
     }
+
+    pub fn args<T>(self, args: T) -> Call
+    where
+        T: Arguments,
+    {
+        self.call().args(args)
+    }
+}
+
+pub trait Arguments {
+    fn to_vec(self) -> Vec<Box<dyn Expr>>;
 }
 
 impl Call {
@@ -61,12 +76,16 @@ impl Call {
         self
     }
 
-    pub fn args<E>(mut self, args: impl IntoIterator<Item = E>) -> Self
+    pub fn extend_args(mut self, args: impl IntoIterator<Item = Box<dyn Expr>>) -> Self {
+        self.args.extend(args);
+        self
+    }
+
+    pub fn args<T>(mut self, args: T) -> Self
     where
-        E: Expr + 'static,
+        T: Arguments,
     {
-        self.args
-            .extend(args.into_iter().map(|e| Box::new(e) as Box<dyn Expr>));
+        self.args.extend(args.to_vec());
         self
     }
 }
@@ -94,12 +113,14 @@ impl Collectable for Call {
 }
 
 decl_builtins! {
-    Abs,
-    Sqrt,
-    Cbrt,
+    Coalesce,
+    Nullif,
+
+    Greatest,
+    Least,
+
     Degrees,
     Radians,
-    Div,
     Exp,
     Ceil,
     Floor,
@@ -107,9 +128,7 @@ decl_builtins! {
     Ln,
     Log,
     Log10,
-    Mod,
     Pi,
-    Power,
     Sign,
     Trunc,
     Factorial,
@@ -192,10 +211,80 @@ decl_builtins! {
     VarPop,
     VarSamp,
 
-    BitAnd,
-    BitOr,
+    //BitAnd,
+    //BitOr,
     BoolAnd,
     BoolOr,
     Every,
     Count,
+}
+
+macro_rules! impl_args {
+    ($(($($t:ident),*)),*$(,)*) => {
+        $(
+            #[allow(non_snake_case)]
+            impl<$($t: Expr + 'static),*> Arguments for ($($t,)*) {
+                fn to_vec(self) -> Vec<Box<dyn Expr>> {
+                    let ($($t,)*) = self;
+                    vec![$(Box::new($t)),*]
+                }
+            }
+        )*
+    }
+}
+
+macro_rules! impl_arg_for_exprs {
+    ($($t:ident$(<$($g:ident),*>)?),*$(,)*) => {
+        $(
+            impl$(<$($g),*>)? Arguments for $t$(<$($g),*>)? where Self: Expr + 'static {
+                fn to_vec(self) -> Vec<Box<dyn Expr>> {
+                    vec![Box::new(self)]
+                }
+            }
+        )*
+    }
+}
+
+impl_args! {
+    (A),
+    (A, B),
+    (A, B, C),
+    (A, B, C, D),
+    (A, B, C, D, E),
+    (A, B, C, D, E, F),
+    (A, B, C, D, E, F, G),
+    (A, B, C, D, E, F, G, H),
+    (A, B, C, D, E, F, G, H, I),
+    (A, B, C, D, E, F, G, H, I, J),
+    (A, B, C, D, E, F, G, H, I, J, K),
+    (A, B, C, D, E, F, G, H, I, J, K, L),
+    (A, B, C, D, E, F, G, H, I, J, K, L, M),
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N),
+}
+
+impl_arg_for_exprs! {
+    Any,
+    Var,
+    BetweenExpr<X, A, B>,
+    BinaryExpr<Lhs, Rhs>,
+    CompExpr<Lhs, Rhs>,
+    Call,
+    IsExpr<V>,
+    Literal,
+    OrderExpr<E>,
+    ExistsExpr,
+    UnaryExpr<V>,
+    Subscript<E, I>,
+    CastExpr<T>,
+    LikeExpr<E>,
+    Field<E, I>,
+}
+
+impl<C> Arguments for ColumnRef<C>
+where
+    C: Table,
+{
+    fn to_vec(self) -> Vec<Box<dyn Expr>> {
+        vec![Box::new(self)]
+    }
 }

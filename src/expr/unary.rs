@@ -6,8 +6,8 @@ enum UnaryOp {
     Neg,
     BitNot,
     Abs,
-    SquareRoot,
-    CubeRoot,
+    Sqrt,
+    Cbrt,
 }
 
 #[rustfmt::skip]
@@ -25,10 +25,10 @@ pub trait UnaryExt: Expr + Sized {
         UnaryExpr { value: self, op: UnaryOp::Abs }
     }
     fn square_root(self) -> UnaryExpr<Self> {
-        UnaryExpr { value: self, op: UnaryOp::SquareRoot }
+        UnaryExpr { value: self, op: UnaryOp::Sqrt }
     }
     fn cube_root(self) -> UnaryExpr<Self> {
-        UnaryExpr { value: self, op: UnaryOp::CubeRoot }
+        UnaryExpr { value: self, op: UnaryOp::Cbrt }
     }
 }
 
@@ -50,8 +50,8 @@ where
             UnaryOp::Neg => "0 - ",
             UnaryOp::BitNot => "~",
             UnaryOp::Abs => "@",
-            UnaryOp::SquareRoot => "|/",
-            UnaryOp::CubeRoot => "||/",
+            UnaryOp::Sqrt => "|/",
+            UnaryOp::Cbrt => "||/",
         })?;
 
         self.value._collect(w, t)

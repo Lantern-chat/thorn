@@ -58,6 +58,12 @@ macro_rules! table {
         }
 
         impl $crate::Expr for $table {}
+
+        impl $crate::Arguments for $table {
+            fn to_vec(self) -> Vec<Box<dyn $crate::Expr>> {
+                vec![Box::new(self)]
+            }
+        }
     }
 }
 
