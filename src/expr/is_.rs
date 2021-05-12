@@ -48,15 +48,17 @@ pub trait IsExt: Expr + Sized {
     }
 }
 
-impl<T> IsExt for T where T: Expr {}
+impl<T> IsExt for T where T: ValueExpr {}
 
 pub struct IsExpr<V> {
     value: V,
     op: IsOp,
 }
 
-impl<V: Expr> Expr for IsExpr<V> {}
-impl<V: Expr> Collectable for IsExpr<V> {
+impl<V: ValueExpr> BooleanExpr for IsExpr<V> {}
+impl<V: ValueExpr> ValueExpr for IsExpr<V> {}
+impl<V: ValueExpr> Expr for IsExpr<V> {}
+impl<V: ValueExpr> Collectable for IsExpr<V> {
     fn needs_wrapping(&self) -> bool {
         true
     }

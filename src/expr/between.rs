@@ -31,7 +31,7 @@ pub trait BetweenExt: Expr + Sized {
     }
 }
 
-impl<T> BetweenExt for T where T: Expr {}
+impl<T> BetweenExt for T where T: ValueExpr {}
 
 pub struct BetweenExpr<X, A, B> {
     x: X,
@@ -40,8 +40,10 @@ pub struct BetweenExpr<X, A, B> {
     op: BetweenOp,
 }
 
-impl<X: Expr, A: Expr, B: Expr> Expr for BetweenExpr<X, A, B> {}
-impl<X: Expr, A: Expr, B: Expr> Collectable for BetweenExpr<X, A, B> {
+impl<X: ValueExpr, A: ValueExpr, B: ValueExpr> BooleanExpr for BetweenExpr<X, A, B> {}
+impl<X: ValueExpr, A: ValueExpr, B: ValueExpr> ValueExpr for BetweenExpr<X, A, B> {}
+impl<X: ValueExpr, A: ValueExpr, B: ValueExpr> Expr for BetweenExpr<X, A, B> {}
+impl<X: ValueExpr, A: ValueExpr, B: ValueExpr> Collectable for BetweenExpr<X, A, B> {
     fn needs_wrapping(&self) -> bool {
         true
     }

@@ -32,18 +32,16 @@ pub trait UnaryExt: Expr + Sized {
     }
 }
 
-impl<T> UnaryExt for T where T: Expr {}
+impl<T> UnaryExt for T where T: ValueExpr {}
 
 pub struct UnaryExpr<V> {
     value: V,
     op: UnaryOp,
 }
 
-impl<V> Expr for UnaryExpr<V> where V: Expr {}
-impl<V> Collectable for UnaryExpr<V>
-where
-    V: Expr,
-{
+impl<V: ValueExpr> ValueExpr for UnaryExpr<V> {}
+impl<V: ValueExpr> Expr for UnaryExpr<V> {}
+impl<V: ValueExpr> Collectable for UnaryExpr<V> {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         w.write_str(match self.op {
             UnaryOp::Not => "!",

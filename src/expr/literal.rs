@@ -29,6 +29,7 @@ literals! {
     TextString: String,
 }
 
+impl ValueExpr for Literal {}
 impl Expr for Literal {}
 impl Collectable for Literal {
     fn collect(&self, w: &mut dyn Write, _: &mut Collector) -> fmt::Result {

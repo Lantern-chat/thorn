@@ -13,11 +13,7 @@ enum BinaryOp {
     BitXor,
     BitshiftLeft,
     BitshiftRight,
-    IsDistinctFrom,
-    IsNotDistinctFrom,
     Concat,
-    LogicalAnd,
-    LogicalOr,
 }
 
 #[rustfmt::skip]
@@ -67,28 +63,12 @@ pub trait BinaryExt: Expr + Sized {
         BinaryExpr { lhs: self, rhs, op: BinaryOp::BitshiftRight }
     }
     #[inline]
-    fn is_distinct_from<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
-        BinaryExpr { lhs: self, rhs, op: BinaryOp::IsDistinctFrom }
-    }
-    #[inline]
-    fn is_not_distinct_from<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
-        BinaryExpr { lhs: self, rhs, op: BinaryOp::IsNotDistinctFrom }
-    }
-    #[inline]
     fn concat<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
         BinaryExpr { lhs: self, rhs, op: BinaryOp::Concat }
     }
-    #[inline]
-    fn and<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
-        BinaryExpr { lhs: self, rhs, op: BinaryOp::LogicalAnd }
-    }
-    #[inline]
-    fn or<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
-        BinaryExpr { lhs: self, rhs, op: BinaryOp::LogicalOr }
-    }
 }
 
-impl<T> BinaryExt for T where T: Expr {}
+impl<T> BinaryExt for T where T: ValueExpr {}
 
 pub struct BinaryExpr<Lhs, Rhs> {
     lhs: Lhs,
@@ -96,8 +76,9 @@ pub struct BinaryExpr<Lhs, Rhs> {
     op: BinaryOp,
 }
 
-impl<Lhs: Expr, Rhs: Expr> Expr for BinaryExpr<Lhs, Rhs> {}
-impl<Lhs: Expr, Rhs: Expr> Collectable for BinaryExpr<Lhs, Rhs> {
+impl<Lhs: ValueExpr, Rhs: ValueExpr> ValueExpr for BinaryExpr<Lhs, Rhs> {}
+impl<Lhs: ValueExpr, Rhs: ValueExpr> Expr for BinaryExpr<Lhs, Rhs> {}
+impl<Lhs: ValueExpr, Rhs: ValueExpr> Collectable for BinaryExpr<Lhs, Rhs> {
     fn needs_wrapping(&self) -> bool {
         true
     }
@@ -118,11 +99,7 @@ impl<Lhs: Expr, Rhs: Expr> Collectable for BinaryExpr<Lhs, Rhs> {
             BinaryOp::BitXor => "#",
             BinaryOp::BitshiftLeft => "<<",
             BinaryOp::BitshiftRight => ">>",
-            BinaryOp::IsDistinctFrom => "IS DISTINCT FROM",
-            BinaryOp::IsNotDistinctFrom => "IS NOT DISTINCT FROM",
             BinaryOp::Concat => "||",
-            BinaryOp::LogicalAnd => "AND",
-            BinaryOp::LogicalOr => "OR",
         })?;
 
         w.write_str(" ")?;

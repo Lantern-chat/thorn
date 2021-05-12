@@ -24,6 +24,22 @@ where
 {
 }
 
+pub trait ValueExpr: Expr {}
+impl<T> ValueExpr for T
+where
+    T: Deref,
+    <T as Deref>::Target: ValueExpr,
+{
+}
+
+pub trait BooleanExpr: ValueExpr {}
+impl<T> BooleanExpr for T
+where
+    T: Deref,
+    <T as Deref>::Target: BooleanExpr,
+{
+}
+
 pub mod as_;
 pub mod between;
 pub mod binary;
@@ -67,6 +83,7 @@ impl PlaceholderExpr {
     }
 }
 
+impl ValueExpr for PlaceholderExpr {}
 impl Expr for PlaceholderExpr {}
 impl Collectable for PlaceholderExpr {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
@@ -83,6 +100,7 @@ impl Collectable for PlaceholderExpr {
 }
 
 pub struct Any;
+impl ValueExpr for Any {}
 impl Expr for Any {}
 impl Collectable for Any {
     fn collect(&self, w: &mut dyn Write, _: &mut Collector) -> fmt::Result {
@@ -93,6 +111,7 @@ impl Collectable for Any {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ColumnRef<C>(pub C);
 
+impl<C> ValueExpr for ColumnRef<C> where C: Table {}
 impl<C> Expr for ColumnRef<C> where C: Table {}
 impl<C> Collectable for ColumnRef<C>
 where
@@ -109,8 +128,9 @@ pub struct Subscript<E, I> {
     index: I,
 }
 
-impl<E: Expr, I: Expr> Expr for Subscript<E, I> {}
-impl<E: Expr, I: Expr> Collectable for Subscript<E, I> {
+impl<E: ValueExpr, I: ValueExpr> ValueExpr for Subscript<E, I> {}
+impl<E: ValueExpr, I: ValueExpr> Expr for Subscript<E, I> {}
+impl<E: ValueExpr, I: ValueExpr> Collectable for Subscript<E, I> {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         self.inner._collect(w, t)?;
         w.write_str("[")?;
@@ -125,11 +145,9 @@ pub struct Field<E, N> {
 }
 
 // TODO: Other strongly-typed named fields?
-impl<E> Expr for Field<E, &'static str> where E: Expr {}
-impl<E> Collectable for Field<E, &'static str>
-where
-    E: Expr,
-{
+impl<E: ValueExpr> ValueExpr for Field<E, &'static str> {}
+impl<E: ValueExpr> Expr for Field<E, &'static str> {}
+impl<E: ValueExpr> Collectable for Field<E, &'static str> {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         self.inner._collect(w, t)?;
         write!(w, ".\"{}\"", self.field)
@@ -147,13 +165,11 @@ pub trait CastExt: Expr + Sized {
     }
 }
 
-impl<T> CastExt for T where T: Expr {}
+impl<T> CastExt for T where T: ValueExpr {}
 
-impl<T> Expr for CastExpr<T> where T: Expr {}
-impl<T> Collectable for CastExpr<T>
-where
-    T: Expr,
-{
+impl<T: ValueExpr> ValueExpr for CastExpr<T> {}
+impl<T: ValueExpr> Expr for CastExpr<T> {}
+impl<T: ValueExpr> Collectable for CastExpr<T> {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         self.inner._collect(w, t)?;
         write!(w, "::{}", self.into.name())
@@ -184,8 +200,10 @@ pub trait LikeExt: Expr + Sized {
 }
 impl<T> LikeExt for T where T: Expr {}
 
-impl<E: Expr> Expr for LikeExpr<E> {}
-impl<E: Expr> Collectable for LikeExpr<E> {
+impl<E: ValueExpr> BooleanExpr for LikeExpr<E> {}
+impl<E: ValueExpr> ValueExpr for LikeExpr<E> {}
+impl<E: ValueExpr> Expr for LikeExpr<E> {}
+impl<E: ValueExpr> Collectable for LikeExpr<E> {
     fn needs_wrapping(&self) -> bool {
         true
     }
@@ -203,3 +221,39 @@ impl<E: Expr> Collectable for LikeExpr<E> {
         self.pattern._collect(w, t)
     }
 }
+
+/*
+macro_rules! impl_tuple_expr {
+    ($(($($t:ident),*)),*$(,)*) => {
+        $(
+            impl<$($t: Expr),*> Expr for ($($t,)*) {}
+            impl<$($t: Collectable),*> Collectable for ($($t,)*) {
+                fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
+                    let ($(ref $t,)*) = *self;
+                    $(
+                        $t._collect(w, t)?;
+                    )*
+                    Ok(())
+                }
+            }
+        )*
+    }
+}
+
+impl_tuple_expr! {
+    (A),
+    //(A, B),
+    //(A, B, C),
+    //(A, B, C, D),
+    //(A, B, C, D, E),
+    //(A, B, C, D, E, F),
+    //(A, B, C, D, E, F, G),
+    //(A, B, C, D, E, F, G, H),
+    //(A, B, C, D, E, F, G, H, I),
+    //(A, B, C, D, E, F, G, H, I, J),
+    //(A, B, C, D, E, F, G, H, I, J, K),
+    //(A, B, C, D, E, F, G, H, I, J, K, L),
+    //(A, B, C, D, E, F, G, H, I, J, K, L, M),
+    //(A, B, C, D, E, F, G, H, I, J, K, L, M, N),
+}
+*/

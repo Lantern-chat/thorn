@@ -90,6 +90,7 @@ impl Call {
     }
 }
 
+impl ValueExpr for Call {}
 impl Expr for Call {}
 impl Collectable for Call {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
@@ -219,6 +220,7 @@ decl_builtins! {
     Count,
 }
 
+// TODO: Figure out a better way to do this
 macro_rules! impl_args {
     ($(($($t:ident),*)),*$(,)*) => {
         $(

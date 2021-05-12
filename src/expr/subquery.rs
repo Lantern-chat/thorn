@@ -16,6 +16,8 @@ impl ExistsExt for SelectQuery {
     }
 }
 
+impl BooleanExpr for ExistsExpr {}
+impl ValueExpr for ExistsExpr {}
 impl Expr for ExistsExpr {}
 impl Collectable for ExistsExpr {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {

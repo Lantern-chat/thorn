@@ -8,10 +8,14 @@ enum ComparisonOp {
     GreaterThanEqual,
     Equal,
     NotEqual,
+    IsDistinctFrom,
+    IsNotDistinctFrom,
+    LogicalAnd,
+    LogicalOr,
 }
 
 pub trait ComparableExpr: Collectable {}
-impl<T> ComparableExpr for T where T: Expr {}
+impl<T> ComparableExpr for T where T: ValueExpr {}
 
 impl<T> CompExt for T where T: Expr {}
 #[rustfmt::skip]
@@ -40,6 +44,22 @@ pub trait CompExt: Expr + Sized {
     fn not_equals<Rhs>(self, rhs: Rhs) -> CompExpr<Self, Rhs> {
         CompExpr { lhs: self, rhs, op: ComparisonOp::NotEqual }
     }
+    #[inline]
+    fn is_distinct_from<Rhs>(self, rhs: Rhs) -> CompExpr<Self, Rhs> {
+        CompExpr { lhs: self, rhs, op: ComparisonOp::IsDistinctFrom }
+    }
+    #[inline]
+    fn is_not_distinct_from<Rhs>(self, rhs: Rhs) -> CompExpr<Self, Rhs> {
+        CompExpr { lhs: self, rhs, op: ComparisonOp::IsNotDistinctFrom }
+    }
+    #[inline]
+    fn and<Rhs>(self, rhs: Rhs) -> CompExpr<Self, Rhs> {
+        CompExpr { lhs: self, rhs, op: ComparisonOp::LogicalAnd }
+    }
+    #[inline]
+    fn or<Rhs>(self, rhs: Rhs) -> CompExpr<Self, Rhs> {
+        CompExpr { lhs: self, rhs, op: ComparisonOp::LogicalOr }
+    }
 }
 
 pub struct CompExpr<Lhs, Rhs> {
@@ -48,6 +68,8 @@ pub struct CompExpr<Lhs, Rhs> {
     op: ComparisonOp,
 }
 
+impl<Lhs: ComparableExpr, Rhs: ComparableExpr> BooleanExpr for CompExpr<Lhs, Rhs> {}
+impl<Lhs: ComparableExpr, Rhs: ComparableExpr> ValueExpr for CompExpr<Lhs, Rhs> {}
 impl<Lhs: ComparableExpr, Rhs: ComparableExpr> Expr for CompExpr<Lhs, Rhs> {}
 impl<Lhs: ComparableExpr, Rhs: ComparableExpr> Collectable for CompExpr<Lhs, Rhs> {
     fn needs_wrapping(&self) -> bool {
@@ -65,6 +87,10 @@ impl<Lhs: ComparableExpr, Rhs: ComparableExpr> Collectable for CompExpr<Lhs, Rhs
             ComparisonOp::GreaterThanEqual => ">=",
             ComparisonOp::Equal => "=",
             ComparisonOp::NotEqual => "<>",
+            ComparisonOp::IsDistinctFrom => "IS DISTINCT FROM",
+            ComparisonOp::IsNotDistinctFrom => "IS NOT DISTINCT FROM",
+            ComparisonOp::LogicalAnd => "AND",
+            ComparisonOp::LogicalOr => "OR",
         })?;
 
         w.write_str(" ")?;

@@ -98,7 +98,7 @@ impl SelectQuery {
     pub fn join_left_table_on<T, E>(mut self, cond: E) -> Self
     where
         T: Table,
-        E: Expr + 'static,
+        E: BooleanExpr + 'static,
     {
         self.from = Some(Box::new(Join {
             l: self.from.unwrap(),
@@ -111,7 +111,7 @@ impl SelectQuery {
 
     pub fn and_where<E>(mut self, cond: E) -> Self
     where
-        E: Expr + 'static,
+        E: BooleanExpr + 'static,
     {
         self.wheres.push(Box::new(cond));
         self
@@ -119,7 +119,7 @@ impl SelectQuery {
 
     pub fn limit<E>(mut self, expr: E) -> Self
     where
-        E: Expr + 'static,
+        E: ValueExpr + 'static,
     {
         self.limit = Some(Box::new(expr));
         self
@@ -132,7 +132,7 @@ impl SelectQuery {
 
     pub fn having<E>(mut self, cond: E) -> Self
     where
-        E: Expr + 'static,
+        E: BooleanExpr + 'static,
     {
         self.having.push(Box::new(cond));
         self
@@ -140,7 +140,7 @@ impl SelectQuery {
 
     pub fn offset<E>(mut self, start: E) -> Self
     where
-        E: Expr + 'static,
+        E: ValueExpr + 'static,
     {
         self.offset = Some(Box::new(start));
         self
