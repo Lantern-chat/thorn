@@ -28,8 +28,8 @@ impl<T: Table> Collectable for TableRef<T> {
         use crate::table::Schema;
 
         match T::SCHEMA {
-            Schema::None => write!(w, "\"{}\"", T::NAME),
-            Schema::Named(name) => write!(w, "\"{}\".\"{}\"", name, T::NAME),
+            Schema::None => write!(w, "\"{}\"", T::NAME.name()),
+            Schema::Named(name) => write!(w, "\"{}\".\"{}\"", name, T::NAME.name()),
         }
     }
 }

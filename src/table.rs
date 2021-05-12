@@ -3,6 +3,11 @@ pub enum Schema {
     Named(&'static str),
 }
 
+pub enum TableName {
+    Default(&'static str),
+    Custom(&'static str),
+}
+
 impl Schema {
     #[doc(hidden)]
     pub const fn set(self, name: &'static str) -> Self {
@@ -10,9 +15,23 @@ impl Schema {
     }
 }
 
+impl TableName {
+    #[doc(hidden)]
+    pub const fn custom(self, name: &'static str) -> Self {
+        TableName::Custom(name)
+    }
+
+    pub const fn name(&self) -> &'static str {
+        match *self {
+            TableName::Default(name) => name,
+            TableName::Custom(name) => name,
+        }
+    }
+}
+
 pub trait Table: Sized + 'static {
     const SCHEMA: Schema;
-    const NAME: &'static str;
+    const NAME: TableName;
     const COLUMNS: &'static [Self];
 
     fn name(&self) -> &'static str;
@@ -20,10 +39,10 @@ pub trait Table: Sized + 'static {
 }
 
 #[macro_export]
-macro_rules! table {
-    ($(#[$meta:meta])* $struct_vis:vis struct $table:ident $(in $schema:ident)? {$(
+macro_rules! tables {
+    ($($(#[$meta:meta])* $struct_vis:vis struct $table:ident $(as $rename:tt)? $(in $schema:ident)? {$(
         $field_name:ident: $ty:expr
-    ),*$(,)?}) => {
+    ),*$(,)?})*) => {$crate::paste::paste! {$(
         $(#[$meta])*
         $struct_vis enum $table {
             $($field_name,)*
@@ -31,15 +50,15 @@ macro_rules! table {
 
         impl $crate::Table for $table {
             const SCHEMA: $crate::table::Schema = $crate::table::Schema::None
-                $(.set(paste::paste!(stringify!([<$schema:snake>]))))?;
+                $(.set(stringify!([<$schema:snake>])))?;
 
-            const NAME: &'static str = paste::paste!(stringify!([<$table:snake>]));
+            const NAME: $crate::table::TableName = $crate::table::TableName::Default(stringify!([<$table:snake>])) $(.custom($rename))?;
             const COLUMNS: &'static [Self] = &[$($table::$field_name),*];
 
             #[inline]
             fn name(&self) -> &'static str {
                 match *self {
-                    $($table::$field_name => paste::paste!(stringify!([<$field_name:snake>]))),*
+                    $($table::$field_name => stringify!([<$field_name:snake>])),*
                 }
             }
 
@@ -53,7 +72,9 @@ macro_rules! table {
 
         impl $crate::collect::Collectable for $table {
             fn collect(&self, w: &mut dyn std::fmt::Write, _: &mut $crate::collect::Collector) -> std::fmt::Result {
-                write!(w, "\"{}\".\"{}\"", Self::NAME, self.name())
+                use $crate::table::Table;
+
+                write!(w, "\"{}\".\"{}\"", Self::NAME.name(), self.name())
             }
         }
 
@@ -65,14 +86,14 @@ macro_rules! table {
                 vec![Box::new(self)]
             }
         }
-    }
+    )*}}
 }
 
 use pg::Type;
 
-table! {
+tables! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct TestTable in TestSchema {
+    pub struct TestTable as "tt" in TestSchema {
         Id: Type::INT8,
         UserName: Type::VARCHAR,
     }

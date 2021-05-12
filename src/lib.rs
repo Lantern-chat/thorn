@@ -2,6 +2,9 @@
 
 pub extern crate postgres_types as pg;
 
+#[doc(hidden)]
+pub extern crate paste;
+
 pub mod collect;
 pub mod expr;
 pub mod query;
@@ -23,7 +26,7 @@ mod test {
 
     use table::TestTable;
 
-    table! {
+    tables! {
         pub struct Users in MySchema {
             Id: Type::INT8,
             UserName: Type::VARCHAR,

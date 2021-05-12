@@ -118,7 +118,7 @@ where
     C: Table,
 {
     fn collect(&self, w: &mut dyn Write, _: &mut Collector) -> fmt::Result {
-        write!(w, r#""{}"."{}""#, C::NAME, self.0.name())
+        write!(w, r#""{}"."{}""#, C::NAME.name(), self.0.name())
     }
 }
 
