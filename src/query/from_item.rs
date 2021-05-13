@@ -4,7 +4,6 @@ use crate::{
 };
 
 use std::{
-    any::Any,
     fmt::{self, Write},
     marker::PhantomData,
     ops::Deref,
@@ -43,10 +42,20 @@ pub enum JoinType {
 }
 
 pub struct Join<L, R> {
-    pub l: L,
-    pub r: R,
-    pub cond: Option<Box<dyn Expr>>,
-    pub kind: JoinType,
+    l: L,
+    r: R,
+    conds: Vec<Box<dyn BooleanExpr>>,
+    kind: JoinType,
+}
+
+impl<L, R> Join<L, R> {
+    pub fn on<E>(mut self, expr: E) -> Self
+    where
+        E: BooleanExpr + 'static,
+    {
+        self.conds.push(Box::new(expr));
+        self
+    }
 }
 
 impl<L: FromItem, R: FromItem> FromItem for Join<L, R> {}
@@ -61,9 +70,24 @@ impl<L: FromItem, R: FromItem> Collectable for Join<L, R> {
         })?;
         self.r.collect(w, t)?;
 
-        if let Some(ref cond) = self.cond {
+        let mut conds = self.conds.iter();
+
+        if let Some(cond) = conds.next() {
             w.write_str(" ON ")?;
+            let wrap_paren = conds.len() > 1;
+            if wrap_paren {
+                w.write_str("(")?;
+            }
             cond._collect(w, t)?;
+
+            for cond in conds {
+                w.write_str(" AND ")?;
+                cond._collect(w, t)?;
+            }
+
+            if wrap_paren {
+                w.write_str(")")?;
+            }
         }
 
         Ok(())
@@ -76,3 +100,20 @@ where
     <T as Deref>::Target: FromItem,
 {
 }
+
+pub trait TableJoinExt: Table {
+    fn left_join<F: FromItem>(with: F) -> Join<TableRef<Self>, F> {
+        Join {
+            l: TableRef::new(),
+            r: with,
+            conds: Vec::new(),
+            kind: JoinType::LeftJoin,
+        }
+    }
+
+    fn left_join_table<T: Table>() -> Join<TableRef<Self>, TableRef<T>> {
+        Self::left_join(TableRef::new())
+    }
+}
+
+impl<T> TableJoinExt for T where T: Table {}

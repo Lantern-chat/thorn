@@ -6,13 +6,14 @@ use crate::{
 
 use std::fmt::{self, Write};
 
-use super::{from_item::*, FromItem};
+use super::{from_item::*, with::WithQuery, FromItem};
 
 #[derive(Default)]
 pub struct SelectQuery {
+    pub(crate) with: Option<WithQuery>,
     on: Vec<Box<dyn Expr>>,
     exprs: Vec<Box<dyn Expr>>,
-    from: Option<Box<dyn FromItem>>,
+    froms: Vec<Box<dyn FromItem>>,
     wheres: Vec<Box<dyn Expr>>,
     //groups: Vec<Box<dyn Expr>>, // TODO
     distinct: Option<DistinctMode>,
@@ -71,7 +72,7 @@ impl SelectQuery {
     where
         F: FromItem + 'static,
     {
-        self.from = Some(Box::new(item) as Box<dyn FromItem>);
+        self.froms.push(Box::new(item));
         self
     }
 
@@ -80,33 +81,6 @@ impl SelectQuery {
         T: Table,
     {
         self.from(TableRef::<T>::new())
-    }
-
-    pub fn join_left_table<T>(mut self) -> Self
-    where
-        T: Table,
-    {
-        self.from = Some(Box::new(Join {
-            l: self.from.unwrap(),
-            r: TableRef::<T>::new(),
-            cond: None,
-            kind: JoinType::LeftJoin,
-        }) as Box<dyn FromItem>);
-        self
-    }
-
-    pub fn join_left_table_on<T, E>(mut self, cond: E) -> Self
-    where
-        T: Table,
-        E: BooleanExpr + 'static,
-    {
-        self.from = Some(Box::new(Join {
-            l: self.from.unwrap(),
-            r: TableRef::<T>::new(),
-            cond: Some(Box::new(cond)),
-            kind: JoinType::LeftJoin,
-        }) as Box<dyn FromItem>);
-        self
     }
 
     pub fn and_where<E>(mut self, cond: E) -> Self
@@ -166,6 +140,10 @@ impl Collectable for SelectQuery {
     }
 
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
+        if let Some(ref with) = self.with {
+            with._collect(w, t)?;
+        }
+
         w.write_str("SELECT ")?;
 
         if Some(DistinctMode::Distinct) == self.distinct {
@@ -197,9 +175,34 @@ impl Collectable for SelectQuery {
         }
 
         // FROM
-        if let Some(ref from) = self.from {
+        let mut froms = self.froms.iter();
+        if let Some(from) = froms.next() {
             w.write_str(" FROM ")?;
-            from.collect(w, t)?;
+            from._collect(w, t)?;
+            for from in froms {
+                w.write_str(", ")?;
+                from._collect(w, t)?;
+            }
+        }
+
+        // WITH named AS ... FROM named
+        if let Some(ref with) = self.with {
+            if self.froms.is_empty() {
+                w.write_str(" FROM ")?;
+            } else {
+                w.write_str(", ")?;
+            }
+
+            let mut froms = with.froms();
+
+            if let Some(from) = froms.next() {
+                w.write_str(from)?;
+            }
+
+            for from in froms {
+                w.write_str(", ")?;
+                w.write_str(from)?;
+            }
         }
 
         // WHERE
@@ -269,4 +272,16 @@ impl Collectable for SelectQuery {
 pub enum DistinctMode {
     All,
     Distinct,
+}
+
+pub struct SelectValue {
+    value: SelectQuery,
+}
+
+impl ValueExpr for SelectValue {}
+impl Expr for SelectValue {}
+impl Collectable for SelectValue {
+    fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
+        self.value._collect(w, t)
+    }
 }

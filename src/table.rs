@@ -41,11 +41,12 @@ pub trait Table: Sized + 'static {
 #[macro_export]
 macro_rules! tables {
     ($($(#[$meta:meta])* $struct_vis:vis struct $table:ident $(as $rename:tt)? $(in $schema:ident)? {$(
-        $field_name:ident: $ty:expr
+        $(#[$field_meta:meta])* $field_name:ident: $ty:expr
     ),*$(,)?})*) => {$crate::paste::paste! {$(
         $(#[$meta])*
+        #[derive(Clone, Copy, PartialEq, Eq, Hash)]
         $struct_vis enum $table {
-            $($field_name,)*
+            $($(#[$field_meta])* $field_name,)*
         }
 
         impl $crate::Table for $table {
@@ -92,7 +93,7 @@ macro_rules! tables {
 use pg::Type;
 
 tables! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[derive(Debug)]
     pub struct TestTable as "tt" in TestSchema {
         Id: Type::INT8,
         UserName: Type::VARCHAR,

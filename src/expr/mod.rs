@@ -52,6 +52,7 @@ pub mod subquery;
 pub mod unary;
 
 pub use self::{
+    as_::{RenamedExpr, RenamedExt},
     between::{BetweenExpr, BetweenExt},
     binary::{BinaryExpr, BinaryExt},
     comparison::{CompExpr, CompExt},
