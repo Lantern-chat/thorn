@@ -12,7 +12,7 @@ pub use call::CallQuery;
 use crate::Call;
 
 pub mod with;
-pub use with::WithableQuery;
+pub use with::{TableAsExt, WithQuery, WithableQuery, WithableQueryExt};
 
 pub struct Query;
 impl Query {
@@ -22,5 +22,9 @@ impl Query {
 
     pub fn call(proc: Call) -> CallQuery {
         CallQuery::new(proc)
+    }
+
+    pub fn with() -> WithQuery {
+        WithQuery::default()
     }
 }

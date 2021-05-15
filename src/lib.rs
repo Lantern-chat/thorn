@@ -15,7 +15,7 @@ pub mod table;
 
 pub use collect::Collectable;
 pub use expr::{Expr, *};
-pub use query::{Query, TableJoinExt};
+pub use query::{Query, TableAsExt, TableJoinExt, WithableQueryExt};
 pub use table::Table;
 
 #[cfg(test)]
@@ -35,7 +35,19 @@ mod test {
 
     #[test]
     fn test() {
-        let s = Query::select()
+        tables! {
+            struct Temp {
+                Id: Type::INT4,
+            }
+        }
+
+        let s = Query::with()
+            .with(Temp::as_query(
+                Query::select()
+                    .expr(Literal::Int4(1).alias_to(Temp::Id))
+                    .not_materialized(),
+            ))
+            .select()
             .distinct()
             .cols(vec![TestTable::Id, TestTable::UserName])
             .expr(Users::Id.cast(Type::INT8))
@@ -71,6 +83,11 @@ mod test {
                     .from_table::<Users>()
                     .any()
                     .less_than(Var::of(Type::INT4)),
+            )
+            .union_all(
+                Query::select()
+                    .exprs(std::iter::repeat(Literal::Int4(1)).take(6)) // must match length of other queries
+                    .from_table::<Users>(),
             )
             .to_string();
 

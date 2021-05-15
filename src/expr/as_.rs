@@ -44,6 +44,13 @@ pub trait RenamedExt: ValueExpr + Sized {
             name: RenameError::check_name(name)?,
         })
     }
+
+    fn alias_to<C: Table>(self, column: C) -> RenamedExpr<Self> {
+        RenamedExpr {
+            inner: self,
+            name: column.name(),
+        }
+    }
 }
 impl<T> RenamedExt for T where T: ValueExpr {}
 

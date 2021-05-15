@@ -51,6 +51,8 @@ pub mod order;
 pub mod subquery;
 pub mod unary;
 
+pub(crate) mod util;
+
 pub use self::{
     as_::{RenamedExpr, RenamedExt},
     between::{BetweenExpr, BetweenExt},

@@ -1,13 +1,10 @@
-use super::*;
+use super::{with::WithQuery, *};
 use crate::*;
 
-enum Values {
-    Default,
-    Values(Vec<Box<dyn ValueExpr>>),
-}
-
+#[derive(Default)]
 pub struct InsertQuery {
+    with: Option<WithQuery>,
     into: Option<Box<dyn FromItem>>,
-    values: Values,
+    values: Option<Vec<Box<dyn ValueExpr>>>,
     returning: Option<Box<dyn Expr>>,
 }

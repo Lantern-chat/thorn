@@ -102,17 +102,45 @@ where
 }
 
 pub trait TableJoinExt: Table {
-    fn left_join<F: FromItem>(with: F) -> Join<TableRef<Self>, F> {
+    fn join<F: FromItem>(kind: JoinType, with: F) -> Join<TableRef<Self>, F> {
         Join {
             l: TableRef::new(),
             r: with,
             conds: Vec::new(),
-            kind: JoinType::LeftJoin,
+            kind,
         }
+    }
+
+    fn inner_join<F: FromItem>(with: F) -> Join<TableRef<Self>, F> {
+        Self::join(JoinType::InnerJoin, with)
+    }
+
+    fn inner_join_table<T: Table>() -> Join<TableRef<Self>, TableRef<T>> {
+        Self::inner_join(TableRef::new())
+    }
+
+    fn left_join<F: FromItem>(with: F) -> Join<TableRef<Self>, F> {
+        Self::join(JoinType::LeftJoin, with)
     }
 
     fn left_join_table<T: Table>() -> Join<TableRef<Self>, TableRef<T>> {
         Self::left_join(TableRef::new())
+    }
+
+    fn right_join<F: FromItem>(with: F) -> Join<TableRef<Self>, F> {
+        Self::join(JoinType::RightJoin, with)
+    }
+
+    fn right_join_table<T: Table>() -> Join<TableRef<Self>, TableRef<T>> {
+        Self::right_join(TableRef::new())
+    }
+
+    fn full_outer_join<F: FromItem>(with: F) -> Join<TableRef<Self>, F> {
+        Self::join(JoinType::FullOuterJoin, with)
+    }
+
+    fn full_outer_join_table<T: Table>() -> Join<TableRef<Self>, TableRef<T>> {
+        Self::full_outer_join(TableRef::new())
     }
 }
 

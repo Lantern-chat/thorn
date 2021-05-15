@@ -8,6 +8,16 @@ use std::fmt::{self, Write};
 
 use super::{from_item::*, with::WithQuery, FromItem};
 
+#[derive(Clone, Copy)]
+enum CombinationType {
+    Union,
+    UnionAll,
+    Intersect,
+    IntersectAll,
+    Except,
+    ExceptAll,
+}
+
 #[derive(Default)]
 pub struct SelectQuery {
     pub(crate) with: Option<WithQuery>,
@@ -21,6 +31,7 @@ pub struct SelectQuery {
     limit: Option<Box<dyn Expr>>,
     offset: Option<Box<dyn Expr>>,
     orders: Vec<(Order, Box<dyn Expr>)>,
+    combos: Vec<(CombinationType, SelectQuery)>,
 }
 
 impl SelectQuery {
@@ -132,6 +143,36 @@ impl SelectQuery {
         self.orders.push((order.order, Box::new(order.inner)));
         self
     }
+
+    pub fn union(mut self, query: SelectQuery) -> Self {
+        self.combos.push((CombinationType::Union, query));
+        self
+    }
+
+    pub fn union_all(mut self, query: SelectQuery) -> Self {
+        self.combos.push((CombinationType::UnionAll, query));
+        self
+    }
+
+    pub fn intersect(mut self, query: SelectQuery) -> Self {
+        self.combos.push((CombinationType::Intersect, query));
+        self
+    }
+
+    pub fn intersect_all(mut self, query: SelectQuery) -> Self {
+        self.combos.push((CombinationType::IntersectAll, query));
+        self
+    }
+
+    pub fn except(mut self, query: SelectQuery) -> Self {
+        self.combos.push((CombinationType::Except, query));
+        self
+    }
+
+    pub fn except_all(mut self, query: SelectQuery) -> Self {
+        self.combos.push((CombinationType::ExceptAll, query));
+        self
+    }
 }
 
 impl Collectable for SelectQuery {
@@ -140,8 +181,11 @@ impl Collectable for SelectQuery {
     }
 
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
+        use crate::expr::util::collect_delimited;
+
         if let Some(ref with) = self.with {
             with._collect(w, t)?;
+            w.write_str(" ")?; // space before SELECT
         }
 
         w.write_str("SELECT ")?;
@@ -150,39 +194,19 @@ impl Collectable for SelectQuery {
             w.write_str("DISTINCT ")?;
 
             // DISTINCT ON
-            let mut ons = self.on.iter();
-            if let Some(expr) = ons.next() {
-                w.write_str("ON (")?;
-                expr._collect(w, t)?;
-            }
-            for expr in ons {
-                w.write_str(", ")?;
-                expr._collect(w, t)?;
-            }
             if !self.on.is_empty() {
-                w.write_str(")")?;
+                w.write_str("ON ")?;
+                collect_delimited(&self.on, true, ", ", w, t)?;
             }
         }
 
         // SELECT [expressions [, ...]]
-        let mut exprs = self.exprs.iter();
-        if let Some(e) = exprs.next() {
-            e._collect(w, t)?;
-            for e in exprs {
-                w.write_str(", ")?;
-                e._collect(w, t)?;
-            }
-        }
+        collect_delimited(&self.exprs, false, ", ", w, t)?;
 
-        // FROM
-        let mut froms = self.froms.iter();
-        if let Some(from) = froms.next() {
+        // FROM source [, ...]
+        if !self.froms.is_empty() {
             w.write_str(" FROM ")?;
-            from._collect(w, t)?;
-            for from in froms {
-                w.write_str(", ")?;
-                from._collect(w, t)?;
-            }
+            collect_delimited(&self.froms, false, ", ", w, t)?;
         }
 
         // WITH named AS ... FROM named
@@ -194,11 +218,9 @@ impl Collectable for SelectQuery {
             }
 
             let mut froms = with.froms();
-
             if let Some(from) = froms.next() {
                 w.write_str(from)?;
             }
-
             for from in froms {
                 w.write_str(", ")?;
                 w.write_str(from)?;
@@ -206,50 +228,46 @@ impl Collectable for SelectQuery {
         }
 
         // WHERE
-        let mut wheres = self.wheres.iter();
-        if let Some(cond) = wheres.next() {
+        if !self.wheres.is_empty() {
             w.write_str(" WHERE ")?;
-            let where_wrapped = self.wheres.len() > 1;
-            if where_wrapped {
-                w.write_str("(")?;
-            }
-            cond._collect(w, t)?;
-            for cond in wheres {
-                w.write_str(" AND ")?;
-                cond._collect(w, t)?;
-            }
-            if where_wrapped {
-                w.write_str(")")?;
-            }
+            collect_delimited(&self.wheres, self.wheres.len() > 1, " AND ", w, t)?;
         }
 
         // HAVING
-        let mut conds = self.having.iter();
-        if let Some(cond) = conds.next() {
+        if !self.having.is_empty() {
             w.write_str(" HAVING ")?;
-            let having_wrapped = self.having.len() > 1;
-            if having_wrapped {
-                w.write_str("(")?;
-            }
-            cond._collect(w, t)?;
-            for cond in conds {
-                w.write_str(" AND ")?;
-                cond._collect(w, t)?;
-            }
-            if having_wrapped {
-                w.write_str(")")?;
-            }
+            collect_delimited(&self.having, self.having.len() > 1, " AND ", w, t)?;
         }
 
-        let mut orders = self.orders.iter();
-        if let Some((order, ref inner)) = orders.next() {
-            w.write_str(" ORDER BY ")?;
-            OrderExpr { order: *order, inner }._collect(w, t)?; // reconstruct and collect
+        // [ { UNION | INTERSECT | EXCEPT } [ ALL | DISTINCT ] select ]
+        for (kind, query) in &self.combos {
+            assert_eq!(
+                self.exprs.len(),
+                query.exprs.len(),
+                "Unions must produce the same number of columns!"
+            );
 
-            for (order, ref inner) in orders {
-                w.write_str(", ")?;
-                OrderExpr { order: *order, inner }._collect(w, t)?; // reconstruct and collect
-            }
+            w.write_str(match kind {
+                CombinationType::Union => " UNION ",
+                CombinationType::UnionAll => " UNION ALL ",
+                CombinationType::Intersect => " INTERSECT ",
+                CombinationType::IntersectAll => " INTERSECT ALL ",
+                CombinationType::Except => " EXCEPT ",
+                CombinationType::ExceptAll => " EXCEPT ALL ",
+            })?;
+
+            query._collect(w, t)?; // wraps automatically
+        }
+
+        if !self.orders.is_empty() {
+            w.write_str(" ORDER BY ")?;
+
+            let iter = self
+                .orders
+                .iter()
+                .map(|(order, inner)| OrderExpr { order: *order, inner });
+
+            collect_delimited(iter, false, ", ", w, t)?;
         }
 
         // LIMIT
