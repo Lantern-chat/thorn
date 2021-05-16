@@ -71,6 +71,13 @@ macro_rules! tables {
             }
         }
 
+        impl From<$table> for $crate::pg::Type {
+            #[inline]
+            fn from(t: $table) -> Self {
+                t.ty()
+            }
+        }
+
         impl $crate::collect::Collectable for $table {
             fn collect(&self, w: &mut dyn std::fmt::Write, _: &mut $crate::collect::Collector) -> std::fmt::Result {
                 use $crate::table::Table;

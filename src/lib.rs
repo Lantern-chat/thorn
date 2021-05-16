@@ -68,7 +68,7 @@ mod test {
             .and_where(Users::Id.equals(Var::of(Type::INT8)))
             .and_where(
                 Users::UserName
-                    .equals(Var::of(Type::TEXT))
+                    .equals(Var::of(Users::UserName))
                     .or(Users::UserName.like("%Test%")),
             )
             .and_where(Users::Id.less_than(Builtin::OctetLength.arg(Users::Id)))

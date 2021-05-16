@@ -74,15 +74,16 @@ pub struct PlaceholderExpr {
     idx: Option<usize>,
 }
 
+#[rustfmt::skip]
 impl PlaceholderExpr {
     #[inline]
-    pub const fn of(ty: Type) -> Self {
-        PlaceholderExpr { ty, idx: None }
+    pub fn of(ty: impl Into<Type>) -> Self {
+        PlaceholderExpr { ty: ty.into(), idx: None }
     }
 
     #[inline]
-    pub const fn at(ty: Type, idx: usize) -> Self {
-        PlaceholderExpr { ty, idx: Some(idx) }
+    pub fn at(ty: impl Into<Type>, idx: usize) -> Self {
+        PlaceholderExpr { ty: ty.into(), idx: Some(idx) }
     }
 }
 
