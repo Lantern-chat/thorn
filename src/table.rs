@@ -74,6 +74,8 @@ macro_rules! tables {
         impl From<$table> for $crate::pg::Type {
             #[inline]
             fn from(t: $table) -> Self {
+                use $crate::Table;
+
                 t.ty()
             }
         }
