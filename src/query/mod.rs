@@ -9,7 +9,7 @@ pub mod insert;
 pub mod call;
 pub use call::CallQuery;
 
-use crate::Call;
+use crate::{Call, Collectable};
 
 pub mod with;
 pub use with::{TableAsExt, WithQuery, WithableQuery, WithableQueryExt};
@@ -28,3 +28,8 @@ impl Query {
         WithQuery::default()
     }
 }
+
+pub trait AnyQuery: Collectable {}
+
+impl AnyQuery for SelectQuery {}
+impl AnyQuery for CallQuery {}

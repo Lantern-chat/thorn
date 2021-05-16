@@ -8,8 +8,8 @@ use pg::Type;
 
 #[derive(Default)]
 pub struct Collector {
-    pub map: BTreeMap<usize, Type>,
-    pub len: usize,
+    map: BTreeMap<usize, Type>,
+    len: usize,
 }
 
 impl Collector {
@@ -28,6 +28,10 @@ impl Collector {
                 v.insert(t);
             }
         }
+    }
+
+    pub fn types(&self) -> Vec<Type> {
+        self.map.values().cloned().collect()
     }
 }
 

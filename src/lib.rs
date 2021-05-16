@@ -15,7 +15,7 @@ pub mod table;
 
 pub use collect::Collectable;
 pub use expr::{Expr, *};
-pub use query::{Query, TableAsExt, TableJoinExt, WithableQueryExt};
+pub use query::{AnyQuery, Query, TableAsExt, TableJoinExt, WithableQueryExt};
 pub use table::Table;
 
 #[cfg(test)]
@@ -37,18 +37,19 @@ mod test {
     fn test() {
         tables! {
             struct Temp {
-                Id: Type::INT4,
+                _Id: Type::INT4,
             }
         }
 
         let s = Query::with()
             .with(Temp::as_query(
                 Query::select()
-                    .expr(Literal::Int4(1).alias_to(Temp::Id))
+                    .expr(Literal::Int4(1).alias_to(Temp::_Id))
                     .not_materialized(),
             ))
             .select()
             .distinct()
+            .col(Temp::_Id)
             .cols(vec![TestTable::Id, TestTable::UserName])
             .expr(Users::Id.cast(Type::INT8))
             .expr(Builtin::coalesce((TestTable::UserName, Users::UserName)))
@@ -86,7 +87,7 @@ mod test {
             )
             .union_all(
                 Query::select()
-                    .exprs(std::iter::repeat(Literal::Int4(1)).take(6)) // must match length of other queries
+                    .exprs(std::iter::repeat(Literal::Int4(1)).take(7)) // must match length of other queries
                     .from_table::<Users>(),
             )
             .to_string();
