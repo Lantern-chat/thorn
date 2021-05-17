@@ -19,17 +19,25 @@ pub enum RenameError {
     InvalidName,
 }
 
+fn valid_name_start(c: char) -> bool {
+    c.is_alphabetic() || c == '_'
+}
+
+fn valid_name_char(c: char) -> bool {
+    c.is_alphanumeric() || ['_', '$'].contains(&c)
+}
+
 impl RenameError {
     pub(crate) fn check_name(name: &'static str) -> Result<&'static str, Self> {
         let mut chars = name.chars();
 
         match chars.next() {
             None => return Err(RenameError::NameTooShort),
-            Some(c) if !c.is_alphabetic() => return Err(RenameError::NonAlphaStart),
+            Some(c) if !valid_name_start(c) => return Err(RenameError::NonAlphaStart),
             _ => {}
         }
 
-        if !chars.all(char::is_alphanumeric) {
+        if !chars.all(valid_name_char) {
             return Err(RenameError::InvalidName);
         }
 
@@ -59,6 +67,6 @@ impl<E: ValueExpr> Expr for RenamedExpr<E> {}
 impl<E: ValueExpr> Collectable for RenamedExpr<E> {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         self.inner._collect(w, t)?;
-        write!(w, " AS {}", self.name)
+        write!(w, " AS \"{}\"", self.name)
     }
 }
