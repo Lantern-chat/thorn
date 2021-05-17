@@ -35,6 +35,10 @@ pub struct SelectQuery {
 }
 
 impl SelectQuery {
+    pub fn as_value(self) -> SelectValue {
+        SelectValue { value: self }
+    }
+
     pub fn distinct(mut self) -> Self {
         self.distinct = Some(DistinctMode::Distinct);
         self
@@ -211,20 +215,7 @@ impl Collectable for SelectQuery {
 
         // WITH named AS ... FROM named
         if let Some(ref with) = self.with {
-            if self.froms.is_empty() {
-                w.write_str(" FROM ")?;
-            } else {
-                w.write_str(", ")?;
-            }
-
-            let mut froms = with.froms();
-            if let Some(from) = froms.next() {
-                w.write_str(from)?;
-            }
-            for from in froms {
-                w.write_str(", ")?;
-                w.write_str(from)?;
-            }
+            with.collect_froms(self.froms.is_empty(), w, t)?;
         }
 
         // WHERE

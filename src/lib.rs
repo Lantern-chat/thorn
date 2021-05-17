@@ -34,12 +34,37 @@ mod test {
     }
 
     #[test]
+    fn test_update() {
+        tables! {
+            struct Temp {
+                _Id: Type::INT4,
+            }
+        }
+
+        let s = Query::with()
+            .with(Temp::as_query(
+                Query::select()
+                    .expr(Literal::Int4(1).alias_to(Temp::_Id))
+                    .not_materialized(),
+            ))
+            .update()
+            .only()
+            .table::<Users>()
+            .set(Users::Id, Temp::_Id)
+            .and_where(Users::UserName.equals(Var::of(Users::UserName)))
+            .returning(Users::Id)
+            .to_string();
+
+        println!("{}", s.0);
+    }
+
+    #[test]
     fn test_delete() {
         let s = Query::delete()
             .from::<Users>()
             .only()
             .and_where(Users::UserName.equals(Var::of(Users::UserName)))
-            .returning(Users::Id.rename_as("user_id").unwrap())
+            .returning(Users::Id.rename_as("user_id").expect("Invalid name"))
             .to_string();
 
         println!("{}", s.0);

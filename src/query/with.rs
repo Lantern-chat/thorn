@@ -8,7 +8,7 @@ use crate::{
     *,
 };
 
-use super::{DeleteQuery, InsertQuery, SelectQuery};
+use super::{DeleteQuery, InsertQuery, SelectQuery, UpdateQuery};
 
 pub trait WithableQuery: Collectable {}
 
@@ -38,6 +38,33 @@ impl WithQuery {
         self.queries.keys().cloned()
     }
 
+    pub(crate) fn collect_froms(
+        &self,
+        from_prefix: bool,
+        w: &mut dyn Write,
+        _t: &mut Collector,
+    ) -> fmt::Result {
+        if from_prefix {
+            w.write_str(" FROM ")?;
+        } else {
+            w.write_str(", ")?;
+        }
+
+        let mut froms = self.froms();
+        if let Some(from) = froms.next() {
+            w.write_str("\"")?;
+            w.write_str(from)?;
+            w.write_str("\"")?;
+            for from in froms {
+                w.write_str(", \"")?;
+                w.write_str(from)?;
+                w.write_str("\"")?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn select(self) -> SelectQuery {
         let mut select = SelectQuery::default();
         select.with = Some(self);
@@ -54,6 +81,12 @@ impl WithQuery {
         let mut delete = DeleteQuery::default();
         delete.with = Some(self);
         delete
+    }
+
+    pub fn update(self) -> UpdateQuery<()> {
+        let mut update = UpdateQuery::default();
+        update.with = Some(self);
+        update
     }
 }
 
@@ -101,8 +134,9 @@ pub struct NamedQuery<T, Q> {
 
 impl<T: Table, Q: WithableQuery> Collectable for NamedQuery<T, Q> {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
+        w.write_str("\"")?;
         w.write_str(T::NAME.name())?;
-        w.write_str(" AS ")?;
+        w.write_str("\" AS ")?;
 
         self.query._collect(w, t)
     }

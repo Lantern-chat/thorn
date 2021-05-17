@@ -13,6 +13,9 @@ pub use call::CallQuery;
 pub mod delete;
 pub use delete::DeleteQuery;
 
+pub mod update;
+pub use update::UpdateQuery;
+
 use crate::{Call, Collectable};
 
 pub mod with;
@@ -22,6 +25,10 @@ pub struct Query;
 impl Query {
     pub fn select() -> SelectQuery {
         SelectQuery::default()
+    }
+
+    pub fn update() -> UpdateQuery<()> {
+        UpdateQuery::default()
     }
 
     pub fn insert() -> InsertQuery<()> {

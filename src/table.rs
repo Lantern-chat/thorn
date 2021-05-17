@@ -40,14 +40,14 @@ pub struct AnyTable {
 
 const _: Option<&dyn Column> = None;
 
-pub trait Column {
+use crate::collect::Collectable;
+
+pub trait Column: Collectable {
     fn name(&self) -> &'static str;
     fn ty(&self) -> pg::Type;
 }
 
-use crate::collect::Collectable;
-
-pub trait Table: Collectable + Clone + Copy + Column + Sized + 'static {
+pub trait Table: Clone + Copy + Column + Sized + 'static {
     const SCHEMA: Schema;
     const NAME: TableName;
     const COLUMNS: &'static [Self];
