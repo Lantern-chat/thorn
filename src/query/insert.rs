@@ -9,7 +9,7 @@ use std::fmt::{self, Write};
 use super::{from_item::*, with::WithQuery, FromItem};
 
 pub struct InsertQuery<T> {
-    with: Option<WithQuery>,
+    pub(crate) with: Option<WithQuery>,
     cols: Vec<T>,
     values: Vec<Box<dyn ValueExpr>>,
     returning: Option<Box<dyn Expr>>,
@@ -26,10 +26,9 @@ impl<T> Default for InsertQuery<T> {
     }
 }
 
-impl<X> InsertQuery<X> {
+impl InsertQuery<()> {
     pub fn into<T: Table>(self) -> InsertQuery<T> {
         InsertQuery {
-            cols: Vec::new(),
             with: self.with,
             ..InsertQuery::<T>::default()
         }

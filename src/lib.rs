@@ -34,13 +34,29 @@ mod test {
     }
 
     #[test]
-    fn test_insert() {
-        let s = Query::insert()
-            .into::<Users>()
-            .cols(Users::COLUMNS)
-            // or .cols(&[Users::Id, Users::UserName])
-            .returning(Users::Id)
+    fn test_delete() {
+        let s = Query::delete()
+            .from::<Users>()
+            .only()
+            .and_where(Users::UserName.equals(Var::of(Users::UserName)))
+            .returning(Users::Id.rename_as("user_id").unwrap())
             .to_string();
+
+        println!("{}", s.0);
+    }
+
+    #[test]
+    fn test_insert() {
+        let s = || {
+            Query::insert()
+                .into::<Users>()
+                .cols(Users::COLUMNS)
+                .values(vec![Var::of(Users::Id)])
+                // or .cols(&[Users::Id, Users::UserName])
+                .returning(Users::Id)
+        };
+
+        let s = s().to_string();
 
         println!("{}", s.0);
     }

@@ -10,6 +10,9 @@ pub use insert::InsertQuery;
 pub mod call;
 pub use call::CallQuery;
 
+pub mod delete;
+pub use delete::DeleteQuery;
+
 use crate::{Call, Collectable};
 
 pub mod with;
@@ -23,6 +26,10 @@ impl Query {
 
     pub fn insert() -> InsertQuery<()> {
         InsertQuery::default()
+    }
+
+    pub fn delete() -> DeleteQuery<()> {
+        DeleteQuery::default()
     }
 
     pub fn call(proc: Call) -> CallQuery {
@@ -39,3 +46,4 @@ pub trait AnyQuery: Collectable {}
 impl AnyQuery for SelectQuery {}
 impl AnyQuery for CallQuery {}
 impl<T: crate::Table> AnyQuery for InsertQuery<T> {}
+impl<T: crate::Table> AnyQuery for DeleteQuery<T> {}

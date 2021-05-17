@@ -8,7 +8,7 @@ use crate::{
     *,
 };
 
-use super::SelectQuery;
+use super::{DeleteQuery, InsertQuery, SelectQuery};
 
 pub trait WithableQuery: Collectable {}
 
@@ -42,6 +42,18 @@ impl WithQuery {
         let mut select = SelectQuery::default();
         select.with = Some(self);
         select
+    }
+
+    pub fn insert(self) -> InsertQuery<()> {
+        let mut insert = InsertQuery::default();
+        insert.with = Some(self);
+        insert
+    }
+
+    pub fn delete(self) -> DeleteQuery<()> {
+        let mut delete = DeleteQuery::default();
+        delete.with = Some(self);
+        delete
     }
 }
 
