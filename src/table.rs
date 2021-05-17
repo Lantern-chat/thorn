@@ -1,8 +1,10 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Schema {
     None,
     Named(&'static str),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TableName {
     Default(&'static str),
     Custom(&'static str),
@@ -29,13 +31,34 @@ impl TableName {
     }
 }
 
-pub trait Table: Sized + 'static {
+// WIP: Note sure what I'll do with this yet.
+pub struct AnyTable {
+    schema: Schema,
+    name: TableName,
+    columns: Vec<&'static dyn Column>,
+}
+
+const _: Option<&dyn Column> = None;
+
+pub trait Column {
+    fn name(&self) -> &'static str;
+    fn ty(&self) -> pg::Type;
+}
+
+use crate::collect::Collectable;
+
+pub trait Table: Collectable + Clone + Copy + Column + Sized + 'static {
     const SCHEMA: Schema;
     const NAME: TableName;
     const COLUMNS: &'static [Self];
 
-    fn name(&self) -> &'static str;
-    fn ty(&self) -> pg::Type;
+    fn to_any() -> AnyTable {
+        AnyTable {
+            schema: Self::SCHEMA,
+            name: Self::NAME,
+            columns: Self::COLUMNS.iter().map(|c| c as _).collect(),
+        }
+    }
 }
 
 #[macro_export]
@@ -55,7 +78,9 @@ macro_rules! tables {
 
             const NAME: $crate::table::TableName = $crate::table::TableName::Default(stringify!([<$table:snake>])) $(.custom($rename))?;
             const COLUMNS: &'static [Self] = &[$($table::$field_name),*];
+        }
 
+        impl $crate::table::Column for $table {
             #[inline]
             fn name(&self) -> &'static str {
                 match *self {
@@ -74,7 +99,7 @@ macro_rules! tables {
         impl From<$table> for $crate::pg::Type {
             #[inline]
             fn from(t: $table) -> Self {
-                use $crate::Table;
+                use $crate::table::{Table, Column};
 
                 t.ty()
             }
@@ -82,7 +107,7 @@ macro_rules! tables {
 
         impl $crate::collect::Collectable for $table {
             fn collect(&self, w: &mut dyn std::fmt::Write, _: &mut $crate::collect::Collector) -> std::fmt::Result {
-                use $crate::table::Table;
+                use $crate::table::{Table, Column};
 
                 write!(w, "\"{}\".\"{}\"", Self::NAME.name(), self.name())
             }

@@ -55,11 +55,11 @@ impl SelectQuery {
         self.expr(ColumnRef(column))
     }
 
-    pub fn cols<C>(self, columns: impl IntoIterator<Item = C>) -> Self
+    pub fn cols<'a, T>(self, columns: impl IntoIterator<Item = &'a T>) -> Self
     where
-        C: Table,
+        T: Table,
     {
-        self.exprs(columns.into_iter().map(ColumnRef))
+        self.exprs(columns.into_iter().cloned().map(ColumnRef))
     }
 
     pub fn expr<E>(mut self, expression: E) -> Self

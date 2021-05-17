@@ -8,29 +8,67 @@ use std::fmt::{self, Write};
 
 use super::{from_item::*, with::WithQuery, FromItem};
 
-#[derive(Default)]
-pub struct InsertQuery {
+pub struct InsertQuery<T> {
     with: Option<WithQuery>,
-    into: Option<Box<dyn FromItem>>,
+    cols: Vec<T>,
     values: Vec<Box<dyn ValueExpr>>,
     returning: Option<Box<dyn Expr>>,
 }
 
-impl InsertQuery {
-    fn into<I>(mut self, item: I) -> Self
-    where
-        I: FromItem + 'static,
-    {
-        self.into = Some(Box::new(item));
-        self
-    }
-
-    pub fn into_table<T: Table>(self) -> Self {
-        self.into(TableRef::<T>::new())
+impl<T> Default for InsertQuery<T> {
+    fn default() -> Self {
+        InsertQuery {
+            with: Default::default(),
+            cols: Default::default(),
+            values: Default::default(),
+            returning: Default::default(),
+        }
     }
 }
 
-impl Collectable for InsertQuery {
+impl<X> InsertQuery<X> {
+    pub fn into<T: Table>(self) -> InsertQuery<T> {
+        InsertQuery {
+            cols: Vec::new(),
+            with: self.with,
+            ..InsertQuery::<T>::default()
+        }
+    }
+}
+
+impl<T: Table> InsertQuery<T> {
+    pub fn cols<'a>(mut self, cols: impl IntoIterator<Item = &'a T>) -> Self {
+        self.cols.extend(cols.into_iter().cloned());
+        self
+    }
+
+    pub fn values<E>(mut self, exprs: impl IntoIterator<Item = E>) -> Self
+    where
+        E: ValueExpr + 'static,
+    {
+        self.values
+            .extend(exprs.into_iter().map(|e| Box::new(e) as Box<dyn ValueExpr>));
+        self
+    }
+
+    pub fn value<E>(mut self, expr: E) -> Self
+    where
+        E: ValueExpr + 'static,
+    {
+        self.values.push(Box::new(expr));
+        self
+    }
+
+    pub fn returning<E>(mut self, expr: E) -> Self
+    where
+        E: Expr + 'static,
+    {
+        self.returning = Some(Box::new(expr));
+        self
+    }
+}
+
+impl<T: Table> Collectable for InsertQuery<T> {
     fn needs_wrapping(&self) -> bool {
         true
     }
@@ -44,6 +82,33 @@ impl Collectable for InsertQuery {
         }
 
         w.write_str("INSERT INTO ")?;
+
+        TableRef::<T>::new()._collect(w, t)?;
+
+        if !self.cols.is_empty() {
+            w.write_str(" ")?; // space before columns
+            collect_delimited(&self.cols, true, ", ", w, t)?;
+        }
+
+        if self.values.is_empty() {
+            w.write_str(" DEFAULT VALUES")?;
+        } else {
+            if !self.cols.is_empty() {
+                assert_eq!(
+                    self.values.len(),
+                    self.cols.len(),
+                    "Columns and Values must be equal length!"
+                );
+            }
+
+            w.write_str(" VALUES ")?;
+            collect_delimited(&self.values, true, ", ", w, t)?;
+        }
+
+        if let Some(ref returning) = self.returning {
+            w.write_str(" RETURNING ")?;
+            returning._collect(w, t)?;
+        }
 
         Ok(())
     }

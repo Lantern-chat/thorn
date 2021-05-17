@@ -5,6 +5,7 @@ pub mod select;
 pub use select::SelectQuery;
 
 pub mod insert;
+pub use insert::InsertQuery;
 
 pub mod call;
 pub use call::CallQuery;
@@ -18,6 +19,10 @@ pub struct Query;
 impl Query {
     pub fn select() -> SelectQuery {
         SelectQuery::default()
+    }
+
+    pub fn insert() -> InsertQuery<()> {
+        InsertQuery::default()
     }
 
     pub fn call(proc: Call) -> CallQuery {

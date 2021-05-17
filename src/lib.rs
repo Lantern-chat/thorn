@@ -34,7 +34,19 @@ mod test {
     }
 
     #[test]
-    fn test() {
+    fn test_insert() {
+        let s = Query::insert()
+            .into::<Users>()
+            .cols(Users::COLUMNS)
+            // or .cols(&[Users::Id, Users::UserName])
+            .returning(Users::Id)
+            .to_string();
+
+        println!("{}", s.0);
+    }
+
+    #[test]
+    fn test_select() {
         tables! {
             struct Temp {
                 _Id: Type::INT4,
@@ -50,7 +62,7 @@ mod test {
             .select()
             .distinct()
             .col(Temp::_Id)
-            .cols(vec![TestTable::Id, TestTable::UserName])
+            .cols(&[TestTable::Id, TestTable::UserName])
             .expr(Users::Id.cast(Type::INT8))
             .expr(Builtin::coalesce((TestTable::UserName, Users::UserName)))
             .expr(Builtin::count(Any))
