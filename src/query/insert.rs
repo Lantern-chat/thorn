@@ -85,9 +85,17 @@ impl<T: Table> Collectable for InsertQuery<T> {
 
         TableRef::<T>::new()._collect(w, t)?;
 
-        if !self.cols.is_empty() {
-            w.write_str(" ")?; // space before columns
-            collect_delimited(&self.cols, true, ", ", w, t)?;
+        // print column names without table prefix
+        let mut cols = self.cols.iter();
+        if let Some(col) = cols.next() {
+            w.write_str(" (\"")?;
+            w.write_str(col.name())?;
+
+            for col in cols {
+                w.write_str("\", \"")?;
+                w.write_str(col.name())?;
+            }
+            w.write_str("\")")?;
         }
 
         if self.values.is_empty() {
