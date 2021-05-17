@@ -35,12 +35,22 @@ impl TableName {
 pub struct AnyTable {
     schema: Schema,
     name: TableName,
-    columns: Vec<&'static dyn Column>,
+    //columns: Vec<&'static dyn Column>,
+}
+
+use crate::collect::{Collectable, Collector};
+use std::fmt::{self, Write};
+
+impl Collectable for AnyTable {
+    fn collect(&self, w: &mut dyn Write, _: &mut Collector) -> fmt::Result {
+        match self.schema {
+            Schema::None => write!(w, "\"{}\"", self.name.name()),
+            Schema::Named(schema) => write!(w, "\"{}\".\"{}\"", schema, self.name.name()),
+        }
+    }
 }
 
 const _: Option<&dyn Column> = None;
-
-use crate::collect::Collectable;
 
 pub trait Column: Collectable {
     fn name(&self) -> &'static str;
@@ -56,7 +66,7 @@ pub trait Table: Clone + Copy + Column + Sized + 'static {
         AnyTable {
             schema: Self::SCHEMA,
             name: Self::NAME,
-            columns: Self::COLUMNS.iter().map(|c| c as _).collect(),
+            //columns: Self::COLUMNS.iter().map(|c| c as _).collect(),
         }
     }
 }

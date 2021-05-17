@@ -52,5 +52,6 @@ pub trait AnyQuery: Collectable {}
 
 impl AnyQuery for SelectQuery {}
 impl AnyQuery for CallQuery {}
+impl<T: crate::Table> AnyQuery for UpdateQuery<T> {}
 impl<T: crate::Table> AnyQuery for InsertQuery<T> {}
 impl<T: crate::Table> AnyQuery for DeleteQuery<T> {}

@@ -189,3 +189,6 @@ pub trait WithableQueryExt: WithableQuery + Sized {
 impl<T> WithableQueryExt for T where T: WithableQuery {}
 
 impl WithableQuery for SelectQuery {}
+impl<T: Table> WithableQuery for InsertQuery<T> {}
+impl<T: Table> WithableQuery for UpdateQuery<T> {}
+impl<T: Table> WithableQuery for DeleteQuery<T> {}
