@@ -116,6 +116,7 @@ impl Collectable for Call {
 decl_builtins! {
     Coalesce,
     Nullif,
+    Any,
 
     Greatest,
     Least,
