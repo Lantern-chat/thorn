@@ -219,6 +219,9 @@ decl_builtins! {
     BoolOr,
     Every,
     Count,
+
+    ArrayAgg,
+    StringAgg,
 }
 
 // TODO: Figure out a better way to do this
