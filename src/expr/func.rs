@@ -284,6 +284,7 @@ impl_arg_for_exprs! {
     CastExpr<T>,
     LikeExpr<E>,
     Field<E, I>,
+    Case,
 }
 
 impl<C> Arguments for ColumnRef<C>
