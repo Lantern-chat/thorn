@@ -101,7 +101,7 @@ macro_rules! tables {
             #[inline]
             fn ty(&self) -> $crate::pg::Type {
                 match *self {
-                    $($table::$field_name => $ty),*
+                    $($table::$field_name => $crate::pg::Type::from($ty)),*
                 }
             }
         }

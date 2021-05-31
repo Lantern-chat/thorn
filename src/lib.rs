@@ -90,7 +90,7 @@ mod test {
     fn test_select() {
         tables! {
             struct Temp {
-                _Id: Type::INT4,
+                _Id: Users::Id,
             }
         }
 
@@ -98,6 +98,7 @@ mod test {
             .with(Temp::as_query(
                 Query::select()
                     .expr(Literal::Int4(1).alias_to(Temp::_Id))
+                    .expr(Case::default().when_condition(Temp::_Id.is_not_null(), Literal::Int4(1)))
                     .not_materialized(),
             ))
             .select()
