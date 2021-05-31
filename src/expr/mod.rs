@@ -43,6 +43,7 @@ where
 pub mod as_;
 pub mod between;
 pub mod binary;
+pub mod case;
 pub mod comparison;
 pub mod func;
 pub mod is_;
@@ -57,6 +58,7 @@ pub use self::{
     as_::{RenamedExpr, RenamedExt},
     between::{BetweenExpr, BetweenExt},
     binary::{BinaryExpr, BinaryExt},
+    case::Case,
     comparison::{CompExpr, CompExt},
     func::{Arguments, Builtin, Call},
     is_::{IsExpr, IsExt},
