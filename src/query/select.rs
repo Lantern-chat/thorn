@@ -25,7 +25,7 @@ pub struct SelectQuery {
     exprs: Vec<Box<dyn Expr>>,
     froms: Vec<Box<dyn FromItem>>,
     wheres: Vec<Box<dyn Expr>>,
-    //groups: Vec<Box<dyn Expr>>, // TODO
+    groups: Vec<Box<dyn Expr>>,
     distinct: Option<DistinctMode>,
     having: Vec<Box<dyn Expr>>,
     limit: Option<Box<dyn Expr>>,
@@ -103,6 +103,14 @@ impl SelectQuery {
         E: BooleanExpr + 'static,
     {
         self.wheres.push(Box::new(cond));
+        self
+    }
+
+    pub fn group_by<E>(mut self, value: E) -> Self
+    where
+        E: Expr + 'static,
+    {
+        self.groups.push(Box::new(value));
         self
     }
 
@@ -222,6 +230,11 @@ impl Collectable for SelectQuery {
         if !self.wheres.is_empty() {
             w.write_str(" WHERE ")?;
             collect_delimited(&self.wheres, self.wheres.len() > 1, " AND ", w, t)?;
+        }
+
+        if !self.groups.is_empty() {
+            w.write_str(" GROUP BY ")?;
+            collect_delimited(&self.groups, self.groups.len() > 1, ", ", w, t)?;
         }
 
         // HAVING
