@@ -213,8 +213,8 @@ decl_builtins! {
     VarPop,
     VarSamp,
 
-    //BitAnd,
-    //BitOr,
+    BitAnd,
+    BitOr,
     BoolAnd,
     BoolOr,
     Every,
