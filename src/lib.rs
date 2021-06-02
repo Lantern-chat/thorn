@@ -99,6 +99,7 @@ mod test {
                 Query::select()
                     .expr(Literal::Int4(1).alias_to(Temp::_Id))
                     .expr(Case::default().when_condition(Temp::_Id.is_not_null(), Literal::Int4(1)))
+                    .expr(If::condition(Temp::_Id.is_not_null()).then(Literal::Int4(2)))
                     .not_materialized(),
             ))
             .select()
@@ -144,6 +145,7 @@ mod test {
                     .exprs(std::iter::repeat(Literal::Int4(1)).take(7)) // must match length of other queries
                     .from_table::<Users>(),
             )
+            .group_by(Users::Id)
             .to_string();
 
         println!("{}", s.0);

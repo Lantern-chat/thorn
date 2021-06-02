@@ -58,7 +58,7 @@ pub use self::{
     as_::{RenamedExpr, RenamedExt},
     between::{BetweenExpr, BetweenExt},
     binary::{BinaryExpr, BinaryExt},
-    case::Case,
+    case::{Case, If},
     comparison::{CompExpr, CompExt},
     func::{Arguments, Builtin, Call},
     is_::{IsExpr, IsExt},

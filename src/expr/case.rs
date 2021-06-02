@@ -85,3 +85,70 @@ impl Collectable for Case {
         w.write_str(" END")
     }
 }
+
+pub struct If {
+    condition: Box<dyn BooleanExpr>,
+}
+
+pub struct IfThen {
+    case: Case,
+}
+
+pub struct IfThenElse {
+    case: Case,
+}
+
+impl If {
+    pub fn condition<B>(cond: B) -> If
+    where
+        B: BooleanExpr + 'static,
+    {
+        If {
+            condition: Box::new(cond),
+        }
+    }
+
+    pub fn then<V>(self, value: V) -> IfThen
+    where
+        V: ValueExpr + 'static,
+    {
+        IfThen {
+            case: Case::default().when_condition(self.condition, value),
+        }
+    }
+}
+
+impl IfThen {
+    pub fn otherwise<V>(self, value: V) -> IfThenElse
+    where
+        V: ValueExpr + 'static,
+    {
+        IfThenElse {
+            case: self.case.otherwise(value),
+        }
+    }
+}
+
+impl ValueExpr for IfThen {}
+impl Expr for IfThen {}
+impl Collectable for IfThen {
+    fn needs_wrapping(&self) -> bool {
+        self.case.needs_wrapping()
+    }
+
+    fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
+        self.case.collect(w, t)
+    }
+}
+
+impl ValueExpr for IfThenElse {}
+impl Expr for IfThenElse {}
+impl Collectable for IfThenElse {
+    fn needs_wrapping(&self) -> bool {
+        self.case.needs_wrapping()
+    }
+
+    fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
+        self.case.collect(w, t)
+    }
+}
