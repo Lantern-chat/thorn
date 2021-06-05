@@ -145,3 +145,5 @@ pub trait TableJoinExt: Table {
 }
 
 impl<T> TableJoinExt for T where T: Table {}
+
+impl FromItem for Call {}
