@@ -1,5 +1,7 @@
 use super::*;
 
+use std::borrow::Cow;
+
 macro_rules! decl_builtins {
     ($($name:ident),*$(,)*) => {paste::paste! {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,7 +27,7 @@ macro_rules! decl_builtins {
 
 enum CallName {
     Builtin(Builtin),
-    Custom(&'static str),
+    Custom(Cow<'static, str>),
 }
 
 pub struct Call {
@@ -61,9 +63,9 @@ pub trait Arguments {
 }
 
 impl Call {
-    pub fn custom(name: &'static str) -> Self {
+    pub fn custom(name: impl Into<Cow<'static, str>>) -> Self {
         Call {
-            name: CallName::Custom(name),
+            name: CallName::Custom(name.into()),
             args: Vec::new(),
         }
     }
@@ -96,7 +98,7 @@ impl Collectable for Call {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         let name = match self.name {
             CallName::Builtin(b) => b.name(),
-            CallName::Custom(name) => name,
+            CallName::Custom(ref name) => &*name,
         };
         write!(w, "{}(", name)?;
 

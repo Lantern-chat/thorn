@@ -69,6 +69,13 @@ pub trait Table: Clone + Copy + Column + Sized + 'static {
             //columns: Self::COLUMNS.iter().map(|c| c as _).collect(),
         }
     }
+
+    fn full_name() -> String {
+        match Self::SCHEMA {
+            Schema::None => format!("\"{}\"", Self::NAME.name()),
+            Schema::Named(name) => format!("\"{}\".\"{}\"", name, Self::NAME.name()),
+        }
+    }
 }
 
 #[macro_export]
