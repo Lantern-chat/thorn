@@ -8,10 +8,15 @@ use std::fmt::{self, Write};
 
 use super::{from_item::*, with::WithQuery, FromItem};
 
+enum Values {
+    Values(Vec<Box<dyn ValueExpr>>),
+    Query(Box<dyn ValueExpr>),
+}
+
 pub struct InsertQuery<T> {
     pub(crate) with: Option<WithQuery>,
     cols: Vec<T>,
-    values: Vec<Box<dyn ValueExpr>>,
+    values: Values,
     returning: Vec<Box<dyn Expr>>,
 }
 
@@ -20,7 +25,7 @@ impl<T> Default for InsertQuery<T> {
         InsertQuery {
             with: Default::default(),
             cols: Default::default(),
-            values: Default::default(),
+            values: Values::Values(Vec::new()),
             returning: Default::default(),
         }
     }
@@ -45,8 +50,13 @@ impl<T: Table> InsertQuery<T> {
     where
         E: ValueExpr + 'static,
     {
-        self.values
-            .extend(exprs.into_iter().map(|e| Box::new(e) as Box<dyn ValueExpr>));
+        match self.values {
+            Values::Values(ref mut values) => {
+                values.extend(exprs.into_iter().map(|e| Box::new(e) as Box<dyn ValueExpr>));
+            }
+            Values::Query(_) => panic!("Cannot insert both values and query results!"),
+        }
+
         self
     }
 
@@ -54,7 +64,23 @@ impl<T: Table> InsertQuery<T> {
     where
         E: ValueExpr + 'static,
     {
-        self.values.push(Box::new(expr));
+        match self.values {
+            Values::Values(ref mut values) => values.push(Box::new(expr)),
+            Values::Query(_) => panic!("Cannot insert both values and query results!"),
+        }
+
+        self
+    }
+
+    pub fn query<E>(mut self, expr: E) -> Self
+    where
+        E: ValueExpr + 'static,
+    {
+        self.values = match self.values {
+            Values::Values(ref values) if values.is_empty() => Values::Query(Box::new(expr)),
+            Values::Query(_) => panic!("Cannot insert more than one query!"),
+            Values::Values(_) => panic!("Cannot insert both values and query results!"),
+        };
         self
     }
 
@@ -97,19 +123,24 @@ impl<T: Table> Collectable for InsertQuery<T> {
             w.write_str("\")")?;
         }
 
-        if self.values.is_empty() {
-            w.write_str(" DEFAULT VALUES")?;
-        } else {
-            if !self.cols.is_empty() {
-                assert_eq!(
-                    self.values.len(),
-                    self.cols.len(),
-                    "Columns and Values must be equal length!"
-                );
-            }
+        match self.values {
+            Values::Values(ref values) => {
+                if values.is_empty() {
+                    w.write_str(" DEFAULT VALUES")?;
+                } else {
+                    if !self.cols.is_empty() {
+                        assert_eq!(
+                            values.len(),
+                            self.cols.len(),
+                            "Columns and Values must be equal length!"
+                        );
+                    }
 
-            w.write_str(" VALUES ")?;
-            collect_delimited(&self.values, true, ", ", w, t)?;
+                    w.write_str(" VALUES ")?;
+                    collect_delimited(values, true, ", ", w, t)?;
+                }
+            }
+            Values::Query(ref query) => query._collect(w, t)?,
         }
 
         if !self.returning.is_empty() {
