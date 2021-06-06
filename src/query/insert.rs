@@ -12,7 +12,7 @@ pub struct InsertQuery<T> {
     pub(crate) with: Option<WithQuery>,
     cols: Vec<T>,
     values: Vec<Box<dyn ValueExpr>>,
-    returning: Option<Box<dyn Expr>>,
+    returning: Vec<Box<dyn Expr>>,
 }
 
 impl<T> Default for InsertQuery<T> {
@@ -62,7 +62,7 @@ impl<T: Table> InsertQuery<T> {
     where
         E: Expr + 'static,
     {
-        self.returning = Some(Box::new(expr));
+        self.returning.push(Box::new(expr));
         self
     }
 }
@@ -112,9 +112,9 @@ impl<T: Table> Collectable for InsertQuery<T> {
             collect_delimited(&self.values, true, ", ", w, t)?;
         }
 
-        if let Some(ref returning) = self.returning {
+        if !self.returning.is_empty() {
             w.write_str(" RETURNING ")?;
-            returning._collect(w, t)?;
+            collect_delimited(&self.returning, false, ", ", w, t)?;
         }
 
         Ok(())
