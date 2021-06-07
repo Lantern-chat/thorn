@@ -6,7 +6,11 @@ use crate::{
 
 use std::fmt::{self, Write};
 
-use super::{from_item::*, with::WithQuery, FromItem};
+use super::{
+    from_item::*,
+    with::{NamedQuery, WithQuery, WithableQuery},
+    FromItem,
+};
 
 enum Values {
     Values(Vec<Box<dyn ValueExpr>>),
@@ -32,6 +36,18 @@ impl<T> Default for InsertQuery<T> {
 }
 
 impl InsertQuery<()> {
+    pub fn with<W: Table, Q>(mut self, query: NamedQuery<W, Q>) -> Self
+    where
+        Q: WithableQuery + 'static,
+    {
+        self.with = Some(match self.with {
+            Some(with) => with.with(query),
+            None => Query::with().with(query),
+        });
+
+        self
+    }
+
     pub fn into<T: Table>(self) -> InsertQuery<T> {
         InsertQuery {
             with: self.with,

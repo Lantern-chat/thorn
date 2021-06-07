@@ -10,7 +10,11 @@ use std::{
     marker::PhantomData,
 };
 
-use super::{from_item::*, with::WithQuery, FromItem};
+use super::{
+    from_item::*,
+    with::{NamedQuery, WithQuery, WithableQuery},
+    FromItem,
+};
 
 enum Value {
     Default,
@@ -42,6 +46,18 @@ impl<T> Default for UpdateQuery<T> {
 }
 
 impl UpdateQuery<()> {
+    pub fn with<W: Table, Q>(mut self, query: NamedQuery<W, Q>) -> Self
+    where
+        Q: WithableQuery + 'static,
+    {
+        self.with = Some(match self.with {
+            Some(with) => with.with(query),
+            None => Query::with().with(query),
+        });
+
+        self
+    }
+
     pub fn table<T: Table>(self) -> UpdateQuery<T> {
         UpdateQuery {
             with: self.with,

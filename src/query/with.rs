@@ -16,8 +16,8 @@ pub struct WithQueryBuilder;
 
 #[derive(Default)]
 pub struct WithQuery {
-    queries: HashMap<&'static str, Box<dyn Collectable>>,
-    recursive: bool,
+    pub(crate) queries: HashMap<&'static str, Box<dyn Collectable>>,
+    pub(crate) recursive: bool,
 }
 
 impl WithQuery {

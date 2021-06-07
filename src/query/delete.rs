@@ -9,7 +9,11 @@ use std::{
     marker::PhantomData,
 };
 
-use super::{from_item::*, with::WithQuery, FromItem};
+use super::{
+    from_item::*,
+    with::{NamedQuery, WithQuery, WithableQuery},
+    FromItem,
+};
 
 pub struct DeleteQuery<T> {
     pub(crate) with: Option<WithQuery>,
@@ -34,6 +38,18 @@ impl<T> Default for DeleteQuery<T> {
 }
 
 impl DeleteQuery<()> {
+    pub fn with<W: Table, Q>(mut self, query: NamedQuery<W, Q>) -> Self
+    where
+        Q: WithableQuery + 'static,
+    {
+        self.with = Some(match self.with {
+            Some(with) => with.with(query),
+            None => Query::with().with(query),
+        });
+
+        self
+    }
+
     pub fn from<T: Table>(self) -> DeleteQuery<T> {
         DeleteQuery {
             with: self.with,

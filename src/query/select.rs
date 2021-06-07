@@ -6,7 +6,11 @@ use crate::{
 
 use std::fmt::{self, Write};
 
-use super::{from_item::*, with::WithQuery, FromItem};
+use super::{
+    from_item::*,
+    with::{NamedQuery, WithQuery, WithableQuery},
+    FromItem,
+};
 
 #[derive(Clone, Copy)]
 enum CombinationType {
@@ -37,6 +41,19 @@ pub struct SelectQuery {
 impl SelectQuery {
     pub fn as_value(self) -> SelectValue {
         SelectValue { value: self }
+    }
+
+    /// Shorthand for `Query::with().with(query).select()...`
+    pub fn with<T: Table, Q>(mut self, query: NamedQuery<T, Q>) -> Self
+    where
+        Q: WithableQuery + 'static,
+    {
+        self.with = Some(match self.with {
+            Some(with) => with.with(query),
+            None => Query::with().with(query),
+        });
+
+        self
     }
 
     pub fn distinct(mut self) -> Self {
