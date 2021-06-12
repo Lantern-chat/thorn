@@ -29,6 +29,8 @@ pub trait InExt: ValueExpr + Sized {
     }
 }
 
+impl<T> InExt for T where T: ValueExpr {}
+
 impl<E: ValueExpr> BooleanExpr for InExpr<E> {}
 impl<E: ValueExpr> ValueExpr for InExpr<E> {}
 impl<E: ValueExpr> Expr for InExpr<E> {}
