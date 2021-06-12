@@ -48,14 +48,14 @@ impl WithQuery {
         w: &mut dyn Write,
         _t: &mut Collector,
     ) -> fmt::Result {
-        if from_prefix {
-            w.write_str(" FROM ")?;
-        } else {
-            w.write_str(", ")?;
-        }
-
         let mut froms = self.froms();
         if let Some(from) = froms.next() {
+            if from_prefix {
+                w.write_str(" FROM ")?;
+            } else {
+                w.write_str(", ")?;
+            }
+
             w.write_str("\"")?;
             w.write_str(from)?;
             w.write_str("\"")?;
