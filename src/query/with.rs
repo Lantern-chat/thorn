@@ -139,7 +139,7 @@ pub struct NamedQuery<T, Q> {
 }
 
 impl<T, Q> NamedQuery<T, Q> {
-    fn exclude(mut self) -> Self {
+    pub fn exclude(mut self) -> Self {
         self.exclude = true;
         self
     }
