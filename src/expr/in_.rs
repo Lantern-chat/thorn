@@ -37,7 +37,7 @@ impl<E: ValueExpr> Expr for InExpr<E> {}
 impl<E: ValueExpr> Collectable for InExpr<E> {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         self.value._collect(w, t)?;
-        w.write_str("IN (")?;
+        w.write_str(" IN (")?;
 
         match self.exprs.len() {
             1 => self.exprs[0].collect(w, t)?, // don't bother wrapping
