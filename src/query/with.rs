@@ -16,7 +16,7 @@ pub struct WithQueryBuilder;
 
 #[derive(Default)]
 pub struct WithQuery {
-    pub(crate) queries: HashMap<&'static str, Box<dyn Collectable>>,
+    pub(crate) queries: HashMap<&'static str, (bool, Box<dyn Collectable>)>,
     pub(crate) recursive: bool,
 }
 
@@ -30,12 +30,16 @@ impl WithQuery {
     where
         Q: WithableQuery + 'static,
     {
-        self.queries.insert(T::NAME.name(), Box::new(query));
+        self.queries
+            .insert(T::NAME.name(), (query.exclude, Box::new(query)));
         self
     }
 
     pub(crate) fn froms<'a>(&'a self) -> impl Iterator<Item = &'static str> + 'a {
-        self.queries.keys().cloned()
+        self.queries
+            .iter()
+            .filter_map(|(k, v)| (!v.0).then(|| k))
+            .cloned()
     }
 
     pub(crate) fn collect_froms(
@@ -94,7 +98,7 @@ impl Collectable for WithQuery {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         let mut queries = self.queries.values();
 
-        if let Some(query) = queries.next() {
+        if let Some((_, query)) = queries.next() {
             if self.recursive {
                 w.write_str("WITH RECURSIVE ")?;
             } else {
@@ -103,7 +107,7 @@ impl Collectable for WithQuery {
 
             query._collect(w, t)?;
 
-            for query in queries {
+            for (_, query) in queries {
                 w.write_str(", ")?;
                 query._collect(w, t)?;
             }
@@ -120,6 +124,7 @@ pub trait TableAsExt: Table {
     {
         NamedQuery {
             table: PhantomData,
+            exclude: false,
             query,
         }
     }
@@ -129,7 +134,15 @@ impl<T> TableAsExt for T where T: Table {}
 
 pub struct NamedQuery<T, Q> {
     table: PhantomData<T>,
+    exclude: bool,
     query: Q,
+}
+
+impl<T, Q> NamedQuery<T, Q> {
+    fn exclude(mut self) -> Self {
+        self.exclude = true;
+        self
+    }
 }
 
 impl<T: Table, Q: WithableQuery> Collectable for NamedQuery<T, Q> {
