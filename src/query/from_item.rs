@@ -68,7 +68,7 @@ impl<L: FromItem, R: FromItem> Collectable for Join<L, R> {
             JoinType::LeftJoin => " LEFT JOIN ",
             JoinType::RightJoin => " RIGHT JOIN ",
             JoinType::FullOuterJoin => "FULL OUTER JOIN ",
-            JoinType::CrossJoin => "CROSS JOIN ",
+            JoinType::CrossJoin => " CROSS JOIN ",
         })?;
         self.r.collect(w, t)?;
 

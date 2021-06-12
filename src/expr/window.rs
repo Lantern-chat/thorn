@@ -51,8 +51,9 @@ impl<E: WindowExt, W: WindowExpr> Collectable for Window<E, W> {
         self.func._collect(w, t)?;
 
         if !self.filters.is_empty() {
-            w.write_str(" FILTER WHERE ")?;
-            collect_delimited(&self.filters, self.filters.len() > 1, " AND ", w, t)?;
+            w.write_str(" FILTER WHERE (")?;
+            collect_delimited(&self.filters, false, " AND ", w, t)?;
+            w.write_str(")")?;
         }
 
         w.write_str(" OVER (")?;
