@@ -92,6 +92,11 @@ mod test {
             struct Temp {
                 _Id: Users::Id,
             }
+
+            struct Temp2 {
+                _Id: Users::Id,
+                RowNumber: Type::INT8,
+            }
         }
 
         let s = Query::with()
@@ -101,6 +106,13 @@ mod test {
                     .expr(Case::default().when_condition(Temp::_Id.is_not_null(), Literal::Int4(1)))
                     .expr(If::condition(Temp::_Id.is_not_null()).then(Literal::Int4(2)))
                     .not_materialized(),
+            ))
+            .with(Temp2::as_query(
+                Query::select().expr(Users::Id.alias_to(Temp2::_Id)).expr(
+                    Builtin::row_number(())
+                        .over(Users::Id.ascending())
+                        .alias_to(Temp2::RowNumber),
+                ),
             ))
             .select()
             .distinct()

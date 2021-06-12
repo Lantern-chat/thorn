@@ -62,6 +62,12 @@ pub trait Arguments {
     fn to_vec(self) -> Vec<Box<dyn Expr>>;
 }
 
+impl Arguments for () {
+    fn to_vec(self) -> Vec<Box<dyn Expr>> {
+        Vec::new()
+    }
+}
+
 impl Call {
     pub fn custom(name: impl Into<Cow<'static, str>>) -> Self {
         Call {
@@ -224,6 +230,18 @@ decl_builtins! {
 
     ArrayAgg,
     StringAgg,
+
+    RowNumber,
+    Rank,
+    DenseRank,
+    PercentRank,
+    CumeDist,
+    Ntile,
+    Lag,
+    Lead,
+    FirstValue,
+    LastValue,
+    NthValue,
 }
 
 // TODO: Figure out a better way to do this

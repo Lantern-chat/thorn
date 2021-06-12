@@ -51,6 +51,7 @@ pub mod literal;
 pub mod order;
 pub mod subquery;
 pub mod unary;
+pub mod window;
 
 pub(crate) mod util;
 
@@ -66,6 +67,7 @@ pub use self::{
     order::{OrderExpr, OrderExt},
     subquery::{ExistsExpr, ExistsExt, Subquery, SubqueryExt},
     unary::{UnaryExpr, UnaryExt},
+    window::{WindowExpr, WindowExt},
 };
 
 pub type Var = PlaceholderExpr;
