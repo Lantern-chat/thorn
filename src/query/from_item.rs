@@ -39,6 +39,7 @@ pub enum JoinType {
     LeftJoin,
     RightJoin,
     FullOuterJoin,
+    CrossJoin,
 }
 
 pub struct Join<L, R> {
@@ -67,6 +68,7 @@ impl<L: FromItem, R: FromItem> Collectable for Join<L, R> {
             JoinType::LeftJoin => " LEFT JOIN ",
             JoinType::RightJoin => " RIGHT JOIN ",
             JoinType::FullOuterJoin => "FULL OUTER JOIN ",
+            JoinType::CrossJoin => "CROSS JOIN ",
         })?;
         self.r.collect(w, t)?;
 
@@ -141,6 +143,14 @@ pub trait TableJoinExt: Table {
 
     fn full_outer_join_table<T: Table>() -> Join<TableRef<Self>, TableRef<T>> {
         Self::full_outer_join(TableRef::new())
+    }
+
+    fn cross_join<F: FromItem>(with: F) -> Join<TableRef<Self>, F> {
+        Self::join(JoinType::CrossJoin, with)
+    }
+
+    fn cross_join_table<T: Table>() -> Join<TableRef<Self>, TableRef<T>> {
+        Self::cross_join(TableRef::new())
     }
 }
 
