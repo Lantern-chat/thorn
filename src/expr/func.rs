@@ -242,6 +242,9 @@ decl_builtins! {
     FirstValue,
     LastValue,
     NthValue,
+
+    GenerateSeries,
+    GenerateSubscripts,
 }
 
 // TODO: Figure out a better way to do this
