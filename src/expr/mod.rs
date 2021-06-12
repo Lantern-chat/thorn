@@ -46,6 +46,7 @@ pub mod binary;
 pub mod case;
 pub mod comparison;
 pub mod func;
+pub mod in_;
 pub mod is_;
 pub mod literal;
 pub mod order;
@@ -62,6 +63,7 @@ pub use self::{
     case::{Case, If},
     comparison::{CompExpr, CompExt},
     func::{Arguments, Builtin, Call},
+    in_::InExt,
     is_::{IsExpr, IsExt},
     literal::Literal,
     order::{OrderExpr, OrderExt},
