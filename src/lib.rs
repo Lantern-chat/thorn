@@ -13,6 +13,9 @@ pub mod ty;
 #[macro_use]
 pub mod table;
 
+#[macro_use]
+pub mod enums;
+
 pub use collect::Collectable;
 pub use expr::{Expr, *};
 pub use query::{AnyQuery, Query, TableAsExt, TableJoinExt, WithableQueryExt};
