@@ -5,9 +5,9 @@ pub extern crate postgres_types as pg;
 #[doc(hidden)]
 pub extern crate paste;
 
-pub mod name;
 pub mod collect;
 pub mod expr;
+pub mod name;
 pub mod query;
 pub mod ty;
 
@@ -28,6 +28,7 @@ mod test {
 
     use super::*;
 
+    use enums::TestEnum;
     use table::TestTable;
 
     tables! {
@@ -125,6 +126,7 @@ mod test {
             .expr(Users::Id.cast(Type::INT8))
             .expr(Builtin::coalesce((TestTable::UserName, Users::UserName)))
             .expr(Builtin::count(Any))
+            .expr(TestEnum::Test)
             .expr(
                 Var::of(Type::INT4)
                     .neg()
@@ -158,7 +160,7 @@ mod test {
             )
             .union_all(
                 Query::select()
-                    .exprs(std::iter::repeat(Literal::Int4(1)).take(7)) // must match length of other queries
+                    .exprs(std::iter::repeat(Literal::Int4(1)).take(8)) // must match length of other queries
                     .from_table::<Users>(),
             )
             .group_by(Users::Id)

@@ -52,11 +52,17 @@ macro_rules! enums {
 
         impl $crate::Expr for $name {}
         impl $crate::ValueExpr for $name {}
+
+        impl $crate::Arguments for $name {
+            fn to_vec(self) -> Vec<Box<dyn $crate::Expr>> {
+                vec![Box::new(self)]
+            }
+        }
     )*}}
 }
 
 enums! {
-    pub enum TestEnum as "testing_enum" {
+    pub enum TestEnum as "testing_enum" in TestSchema {
         Test
     }
 }
