@@ -1,40 +1,9 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Schema {
-    None,
-    Named(&'static str),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TableName {
-    Default(&'static str),
-    Custom(&'static str),
-}
-
-impl Schema {
-    #[doc(hidden)]
-    pub const fn set(self, name: &'static str) -> Self {
-        Schema::Named(name)
-    }
-}
-
-impl TableName {
-    #[doc(hidden)]
-    pub const fn custom(self, name: &'static str) -> Self {
-        TableName::Custom(name)
-    }
-
-    pub const fn name(&self) -> &'static str {
-        match *self {
-            TableName::Default(name) => name,
-            TableName::Custom(name) => name,
-        }
-    }
-}
+use super::name::{Name, Schema};
 
 // WIP: Note sure what I'll do with this yet.
 pub struct AnyTable {
     schema: Schema,
-    name: TableName,
+    name: Name,
     //columns: Vec<&'static dyn Column>,
 }
 
@@ -59,7 +28,7 @@ pub trait Column: Collectable {
 
 pub trait Table: Clone + Copy + Column + Sized + 'static {
     const SCHEMA: Schema;
-    const NAME: TableName;
+    const NAME: Name;
     const COLUMNS: &'static [Self];
 
     fn to_any() -> AnyTable {
@@ -90,10 +59,10 @@ macro_rules! tables {
         }
 
         impl $crate::Table for $table {
-            const SCHEMA: $crate::table::Schema = $crate::table::Schema::None
+            const SCHEMA: $crate::name::Schema = $crate::name::Schema::None
                 $(.set(stringify!([<$schema:snake>])))?;
 
-            const NAME: $crate::table::TableName = $crate::table::TableName::Default(stringify!([<$table:snake>])) $(.custom($rename))?;
+            const NAME: $crate::name::Name = $crate::name::Name::Default(stringify!([<$table:snake>])) $(.custom($rename))?;
             const COLUMNS: &'static [Self] = &[$($table::$field_name),*];
         }
 

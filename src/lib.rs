@@ -5,6 +5,7 @@ pub extern crate postgres_types as pg;
 #[doc(hidden)]
 pub extern crate paste;
 
+pub mod name;
 pub mod collect;
 pub mod expr;
 pub mod query;

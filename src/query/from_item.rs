@@ -24,7 +24,7 @@ impl<T> TableRef<T> {
 impl<T: Table> FromItem for TableRef<T> {}
 impl<T: Table> Collectable for TableRef<T> {
     fn collect(&self, w: &mut dyn Write, _: &mut Collector) -> fmt::Result {
-        use crate::table::Schema;
+        use crate::name::Schema;
 
         match T::SCHEMA {
             Schema::None => write!(w, "\"{}\"", T::NAME.name()),
