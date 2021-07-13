@@ -324,3 +324,15 @@ impl Collectable for SelectValue {
         self.value._collect(w, t)
     }
 }
+
+impl Arguments for SelectValue {
+    fn to_vec(self) -> Vec<Box<dyn Expr>> {
+        assert_eq!(
+            1,
+            self.value.exprs.len(),
+            "Using SELECT as an argument is only valid with a single expression"
+        );
+
+        vec![Box::new(self)]
+    }
+}
