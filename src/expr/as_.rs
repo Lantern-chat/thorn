@@ -7,6 +7,12 @@ pub struct RenamedExpr<E> {
     name: &'static str,
 }
 
+impl<E> RenamedExpr<E> {
+    pub fn reference(&self) -> RenamedExprRef {
+        RenamedExprRef { name: self.name }
+    }
+}
+
 #[derive(Debug, Clone, Copy, thiserror::Error)]
 pub enum RenameError {
     #[error("Names must be at least 1 character long!")]
@@ -67,6 +73,22 @@ impl<E: ValueExpr> Expr for RenamedExpr<E> {}
 impl<E: ValueExpr> Collectable for RenamedExpr<E> {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         self.inner._collect(w, t)?;
-        write!(w, " AS \"{}\"", self.name)
+        w.write_str(" AS \"")?;
+        w.write_str(self.name)?;
+        w.write_str("\"")
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenamedExprRef {
+    name: &'static str,
+}
+
+impl Expr for RenamedExprRef {}
+impl Collectable for RenamedExprRef {
+    fn collect(&self, w: &mut dyn Write, _: &mut Collector) -> fmt::Result {
+        w.write_str("\"")?;
+        w.write_str(self.name)?;
+        w.write_str("\"")
     }
 }
