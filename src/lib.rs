@@ -19,7 +19,7 @@ pub mod enums;
 
 pub use collect::Collectable;
 pub use expr::{Expr, *};
-pub use query::{AnyQuery, Query, TableAsExt, TableJoinExt, WithableQueryExt};
+pub use query::{AnyQuery, Lateral, Query, TableAsExt, TableJoinExt, WithableQueryExt};
 pub use table::Table;
 
 #[cfg(test)]
@@ -81,12 +81,37 @@ mod test {
             Query::insert()
                 .into::<Users>()
                 .cols(Users::COLUMNS)
-                .values(vec![Var::of(Users::Id)])
+                .values(vec![Var::of(Users::Id), Var::of(Users::UserName)])
                 // or .cols(&[Users::Id, Users::UserName])
                 .returning(Users::Id)
         };
 
         let s = s().to_string();
+
+        println!("{}", s.0);
+    }
+
+    #[test]
+    fn test_lateral() {
+        tables! {
+            struct Temp {
+                Id: Users::Id,
+            }
+        }
+
+        let s = Query::select()
+            .col(Temp::Id)
+            .from(
+                Users::left_join(Lateral(Temp::as_query(
+                    Query::select()
+                        .expr(Users::Id.alias_to(Temp::Id))
+                        .from_table::<Users>(),
+                )))
+                .on(Literal::TRUE)
+                .left_join_table::<Users>()
+                .on(Literal::TRUE),
+            )
+            .to_string();
 
         println!("{}", s.0);
     }

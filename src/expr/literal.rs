@@ -19,6 +19,7 @@ macro_rules! literals {
 }
 
 literals! {
+    Bool: bool,
     Char: i8,
     Int2: i16,
     Int4: i32,
@@ -34,6 +35,10 @@ impl Expr for Literal {}
 impl Collectable for Literal {
     fn collect(&self, w: &mut dyn Write, _: &mut Collector) -> fmt::Result {
         match *self {
+            Literal::Bool(v) => w.write_str(match v {
+                true => "TRUE",
+                false => "FALSE",
+            }),
             Literal::Char(v) => write!(w, "{}", v),
             Literal::Int2(v) => write!(w, "{}", v),
             Literal::Int4(v) => write!(w, "{}", v),
@@ -62,3 +67,10 @@ fn write_escaped_string_quoted(string: &str, w: &mut dyn Write) -> fmt::Result {
     w.write_str(&escaped)?;
     w.write_char('\'')
 }
+
+impl Literal {
+    pub const TRUE: Literal = Literal::Bool(true);
+    pub const FALSE: Literal = Literal::Bool(false);
+}
+
+impl BooleanExpr for Literal {}

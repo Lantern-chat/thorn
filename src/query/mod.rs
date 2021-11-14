@@ -1,5 +1,5 @@
 pub mod from_item;
-pub use from_item::{FromItem, TableJoinExt};
+pub use from_item::{FromItem, Lateral, TableJoinExt};
 
 pub mod select;
 pub use select::SelectQuery;

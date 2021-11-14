@@ -133,9 +133,9 @@ pub trait TableAsExt: Table {
 impl<T> TableAsExt for T where T: Table {}
 
 pub struct NamedQuery<T, Q> {
-    table: PhantomData<T>,
-    exclude: bool,
-    query: Q,
+    pub(crate) table: PhantomData<T>,
+    pub(crate) exclude: bool,
+    pub(crate) query: Q,
 }
 
 impl<T, Q> NamedQuery<T, Q> {

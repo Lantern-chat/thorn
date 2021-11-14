@@ -9,6 +9,8 @@ use std::{
     ops::Deref,
 };
 
+use super::{with::NamedQuery, SelectQuery, WithableQuery};
+
 const _: Option<&dyn FromItem> = None;
 
 pub trait FromItem: Collectable {}
@@ -57,6 +59,47 @@ impl<L, R> Join<L, R> {
         self.conds.push(Box::new(expr));
         self
     }
+
+    fn join<N: FromItem>(self, with: N, kind: JoinType) -> Join<Self, N> {
+        Join {
+            l: self,
+            r: with,
+            conds: Vec::new(),
+            kind,
+        }
+    }
+
+    pub fn left_join<N: FromItem>(self, with: N) -> Join<Self, N> {
+        self.join(with, JoinType::LeftJoin)
+    }
+
+    pub fn left_join_table<T: Table>(self) -> Join<Self, TableRef<T>> {
+        self.left_join(TableRef::new())
+    }
+
+    pub fn inner_join<N: FromItem>(self, with: N) -> Join<Self, N> {
+        self.join(with, JoinType::InnerJoin)
+    }
+
+    pub fn inner_join_table<T: Table>(self) -> Join<Self, TableRef<T>> {
+        self.inner_join(TableRef::new())
+    }
+
+    pub fn cross_join<N: FromItem>(self, with: N) -> Join<Self, N> {
+        self.join(with, JoinType::CrossJoin)
+    }
+
+    pub fn cross_join_table<T: Table>(self) -> Join<Self, TableRef<T>> {
+        self.cross_join(TableRef::new())
+    }
+
+    pub fn full_outer_join<N: FromItem>(self, with: N) -> Join<Self, N> {
+        self.join(with, JoinType::FullOuterJoin)
+    }
+
+    pub fn full_outer_join_table<T: Table>(self) -> Join<Self, TableRef<T>> {
+        self.full_outer_join(TableRef::new())
+    }
 }
 
 impl<L: FromItem, R: FromItem> FromItem for Join<L, R> {}
@@ -70,6 +113,7 @@ impl<L: FromItem, R: FromItem> Collectable for Join<L, R> {
             JoinType::FullOuterJoin => "FULL OUTER JOIN ",
             JoinType::CrossJoin => " CROSS JOIN ",
         })?;
+
         self.r.collect(w, t)?;
 
         let mut conds = self.conds.iter();
@@ -90,6 +134,8 @@ impl<L: FromItem, R: FromItem> Collectable for Join<L, R> {
             if wrap_paren {
                 w.write_str(")")?;
             }
+        } else {
+            panic!("JOIN ON Conditions must not be empty!");
         }
 
         Ok(())
@@ -157,3 +203,15 @@ pub trait TableJoinExt: Table {
 impl<T> TableJoinExt for T where T: Table {}
 
 impl FromItem for Call {}
+
+pub struct Lateral<T>(pub NamedQuery<T, SelectQuery>);
+
+impl<T: Table> FromItem for Lateral<T> {}
+impl<T: Table> Collectable for Lateral<T> {
+    fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
+        w.write_str("LATERAL ")?;
+        self.0.query._collect(w, t)?;
+        w.write_str(" AS ")?;
+        w.write_str(T::NAME.name())
+    }
+}
