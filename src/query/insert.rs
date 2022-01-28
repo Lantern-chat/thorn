@@ -1,6 +1,9 @@
 use crate::{
     collect::{Collectable, Collector},
+    conflict::ConflictAction,
+    name::NameError,
     order::Order,
+    table::Column,
     *,
 };
 
@@ -17,11 +20,20 @@ enum Values {
     Query(Box<dyn ValueExpr>),
 }
 
+enum Conflict {
+    None,
+    Constraint(&'static str),
+    // TODO: Support collations and where statements
+    Column(Vec<Box<dyn Column>>),
+}
+
 pub struct InsertQuery<T> {
     pub(crate) with: Option<WithQuery>,
     cols: Vec<T>,
     values: Values,
     returning: Vec<Box<dyn Expr>>,
+    conflict_target: Conflict,
+    conflict_action: Option<ConflictAction>,
 }
 
 impl<T> Default for InsertQuery<T> {
@@ -31,6 +43,8 @@ impl<T> Default for InsertQuery<T> {
             cols: Default::default(),
             values: Values::Values(Vec::new()),
             returning: Default::default(),
+            conflict_target: Conflict::None,
+            conflict_action: None,
         }
     }
 }
@@ -100,6 +114,33 @@ impl<T: Table> InsertQuery<T> {
         self
     }
 
+    pub fn on_conflict<C>(
+        mut self,
+        cols: impl IntoIterator<Item = C>,
+        action: impl Into<ConflictAction>,
+    ) -> Self
+    where
+        C: Column + 'static,
+    {
+        self.conflict_target =
+            Conflict::Column(cols.into_iter().map(|c| Box::new(c) as Box<dyn Column>).collect());
+        self.conflict_action = Some(action.into());
+        self
+    }
+
+    pub fn on_constraint_conflict(
+        mut self,
+        constraint_name: &'static str,
+        action: impl Into<ConflictAction>,
+    ) -> Result<Self, NameError> {
+        let name = NameError::check_name(constraint_name)?;
+
+        self.conflict_target = Conflict::Constraint(name);
+        self.conflict_action = Some(action.into());
+
+        Ok(self)
+    }
+
     pub fn returning<E>(mut self, expr: E) -> Self
     where
         E: Expr + 'static,
@@ -157,6 +198,33 @@ impl<T: Table> Collectable for InsertQuery<T> {
                 }
             }
             Values::Query(ref query) => query._collect(w, t)?,
+        }
+
+        if let Some(ref conflict_action) = self.conflict_action {
+            w.write_str(" ON CONFLICT ")?;
+
+            match self.conflict_target {
+                Conflict::None => {}
+                Conflict::Constraint(constraint) => write!(w, "ON CONSTRAINT \"{}\"", constraint)?,
+                Conflict::Column(ref cols) => {
+                    w.write_str("(")?;
+
+                    let mut cols = cols.iter();
+
+                    match cols.next() {
+                        Some(first) => write!(w, "\"{}\"", first.name())?,
+                        None => panic!("Missing conflict targets for insert!"),
+                    }
+
+                    for col in cols {
+                        write!(w, ", \"{}\"", col.name())?;
+                    }
+
+                    w.write_str(")")?;
+                }
+            }
+
+            conflict_action.collect(w, t)?;
         }
 
         if !self.returning.is_empty() {

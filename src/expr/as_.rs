@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+use crate::name::NameError;
+
 use super::*;
 
 pub struct RenamedExpr<E> {
@@ -13,49 +15,11 @@ impl<E> RenamedExpr<E> {
     }
 }
 
-#[derive(Debug, Clone, Copy, thiserror::Error)]
-pub enum RenameError {
-    #[error("Names must be at least 1 character long!")]
-    NameTooShort,
-
-    #[error("Names must start with an alphabetic character!")]
-    NonAlphaStart,
-
-    #[error("Names must only contain alphanumeric characters!")]
-    InvalidName,
-}
-
-fn valid_name_start(c: char) -> bool {
-    c.is_alphabetic() || c == '_'
-}
-
-fn valid_name_char(c: char) -> bool {
-    c.is_alphanumeric() || ['_', '$'].contains(&c)
-}
-
-impl RenameError {
-    pub(crate) fn check_name(name: &'static str) -> Result<&'static str, Self> {
-        let mut chars = name.chars();
-
-        match chars.next() {
-            None => return Err(RenameError::NameTooShort),
-            Some(c) if !valid_name_start(c) => return Err(RenameError::NonAlphaStart),
-            _ => {}
-        }
-
-        if !chars.all(valid_name_char) {
-            return Err(RenameError::InvalidName);
-        }
-
-        Ok(name)
-    }
-}
-
 pub trait RenamedExt: ValueExpr + Sized {
-    fn rename_as(self, name: &'static str) -> Result<RenamedExpr<Self>, RenameError> {
+    fn rename_as(self, name: &'static str) -> Result<RenamedExpr<Self>, NameError> {
         Ok(RenamedExpr {
             inner: self,
-            name: RenameError::check_name(name)?,
+            name: NameError::check_name(name)?,
         })
     }
 

@@ -54,13 +54,19 @@ pub trait Collectable {
     }
 
     fn _collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
-        if self.needs_wrapping() {
+        let needs_wrapping = self.needs_wrapping();
+
+        if needs_wrapping {
             w.write_str("(")?;
-            self.collect(w, t)?;
-            w.write_str(")")
-        } else {
-            self.collect(w, t)
         }
+
+        self.collect(w, t)?;
+
+        if needs_wrapping {
+            w.write_str(")")?
+        }
+
+        Ok(())
     }
 
     //fn is_boolean(&self) -> bool;

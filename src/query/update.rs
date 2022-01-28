@@ -16,7 +16,7 @@ use super::{
     FromItem,
 };
 
-enum Value {
+pub(crate) enum Value {
     Default,
     Value(Box<dyn ValueExpr>),
 }
@@ -138,18 +138,16 @@ impl<T: Table> Collectable for UpdateQuery<T> {
 
         let mut sets = self.sets.iter();
         if let Some((col, val)) = sets.next() {
-            write!(w, " SET \"{}\" = ", col.name())?;
-            match val {
-                Value::Default => w.write_str("DEFAULT")?,
-                Value::Value(v) => v._collect(w, t)?,
-            }
+            w.write_str(" SET ")?;
+            col.collect(w, t)?;
+            w.write_str(" = ")?;
+            val.collect(w, t)?;
 
             for (col, val) in sets {
-                write!(w, ", \"{}\" = ", col.name())?;
-                match val {
-                    Value::Default => w.write_str("DEFAULT")?,
-                    Value::Value(v) => v._collect(w, t)?,
-                }
+                w.write_str(", ")?;
+                col.collect(w, t)?;
+                w.write_str(" = ")?;
+                val.collect(w, t)?;
             }
         }
 
@@ -175,5 +173,14 @@ impl<T: Table> Collectable for UpdateQuery<T> {
         }
 
         Ok(())
+    }
+}
+
+impl Collectable for Value {
+    fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
+        match self {
+            Value::Default => w.write_str("DEFAULT"),
+            Value::Value(value) => value._collect(w, t),
+        }
     }
 }

@@ -36,6 +36,12 @@ mod test {
             Id: Type::INT8,
             UserName: Type::VARCHAR,
         }
+
+        pub struct Messages in MySchema {
+            Id: Type::INT8,
+            Author: Type::INT8,
+            Content: Type::TEXT,
+        }
     }
 
     #[test]
@@ -84,6 +90,10 @@ mod test {
                 .values(vec![Var::of(Users::Id), Var::of(Users::UserName)])
                 // or .cols(&[Users::Id, Users::UserName])
                 .returning(Users::Id)
+                .on_conflict(
+                    [Users::Id],
+                    DoUpdate.set(Users::UserName, Literal::TextStr("test")),
+                )
         };
 
         let s = s().to_string();
@@ -102,14 +112,16 @@ mod test {
         let s = Query::select()
             .col(Temp::Id)
             .from(
-                Users::left_join(Lateral(Temp::as_query(
-                    Query::select()
-                        .expr(Users::Id.alias_to(Temp::Id))
-                        .from_table::<Users>(),
-                )))
-                .on(Literal::TRUE)
-                .left_join_table::<Users>()
-                .on(Literal::TRUE),
+                Users::inner_join_table::<Messages>()
+                    .on(Messages::Author.equals(Users::Id))
+                    .left_join_table::<Users>()
+                    .on(Literal::TRUE)
+                    .left_join(Lateral(Temp::as_query(
+                        Query::select()
+                            .expr(Users::Id.alias_to(Temp::Id))
+                            .from_table::<Users>(),
+                    )))
+                    .on(Literal::TRUE),
             )
             .to_string();
 

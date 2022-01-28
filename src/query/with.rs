@@ -2,7 +2,6 @@ use std::fmt::{self, Write};
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::{
-    as_::RenameError,
     collect::{Collectable, Collector},
     order::Order,
     *,

@@ -45,6 +45,7 @@ pub mod between;
 pub mod binary;
 pub mod case;
 pub mod comparison;
+pub mod conflict;
 pub mod func;
 pub mod in_;
 pub mod is_;
@@ -62,6 +63,7 @@ pub use self::{
     binary::{BinaryExpr, BinaryExt},
     case::{Case, If},
     comparison::{CompExpr, CompExt},
+    conflict::{DoNothing, DoUpdate},
     func::{Arguments, Builtin, Call},
     in_::InExt,
     is_::{IsExpr, IsExt},
