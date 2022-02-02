@@ -138,15 +138,11 @@ impl<T: Table> Collectable for UpdateQuery<T> {
 
         let mut sets = self.sets.iter();
         if let Some((col, val)) = sets.next() {
-            w.write_str(" SET ")?;
-            col.collect(w, t)?;
-            w.write_str(" = ")?;
+            write!(w, " SET \"{}\" = ", col.name())?;
             val.collect(w, t)?;
 
             for (col, val) in sets {
-                w.write_str(", ")?;
-                col.collect(w, t)?;
-                w.write_str(" = ")?;
+                write!(w, ", \"{}\" = ", col.name())?;
                 val.collect(w, t)?;
             }
         }

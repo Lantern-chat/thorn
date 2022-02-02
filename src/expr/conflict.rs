@@ -61,18 +61,15 @@ impl Collectable for DoNothing {
 
 impl Collectable for DoUpdateSet {
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
-        w.write_str(" DO UPDATE SET ")?;
+        w.write_str(" DO UPDATE ")?;
 
         let mut sets = self.sets.iter();
         if let Some((col, val)) = sets.next() {
-            col.collect(w, t)?;
-            w.write_str(" = ")?;
+            write!(w, "SET \"{}\" = ", col.name())?;
             val.collect(w, t)?;
 
             for (col, val) in sets {
-                w.write_str(", ")?;
-                col.collect(w, t)?;
-                w.write_str(" = ")?;
+                write!(w, ", \"{}\" = ", col.name())?;
                 val.collect(w, t)?;
             }
         }
