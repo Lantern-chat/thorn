@@ -17,6 +17,7 @@ macro_rules! decl_builtins {
             }
 
             $(
+                #[doc = "Constructs an expression for the `" [<$name:snake:upper>] "` built-in function"]
                 pub fn [<$name:snake>]<T>(args: T) -> Call where T: Arguments {
                     Builtin::$name.args(args)
                 }
@@ -247,6 +248,16 @@ decl_builtins! {
     GenerateSubscripts,
 }
 
+impl Builtin {
+    /// Shorthand for `COALESCE(ARRAY_AGG(args), '{}')`
+    pub fn array_agg_nonnull<T>(args: T) -> Call
+    where
+        T: Arguments,
+    {
+        Builtin::coalesce((Builtin::array_agg(args), Literal::EMPTY_ARRAY.clone()))
+    }
+}
+
 // TODO: Figure out a better way to do this
 macro_rules! impl_args {
     ($(($($t:ident),*)),*$(,)*) => {
@@ -259,7 +270,7 @@ macro_rules! impl_args {
                 }
             }
         )*
-    }
+    };
 }
 
 macro_rules! impl_arg_for_exprs {
@@ -271,7 +282,19 @@ macro_rules! impl_arg_for_exprs {
                 }
             }
         )*
-    }
+    };
+}
+
+macro_rules! impl_arg_for_literals {
+    ($($t:ty),*) => {
+        $(
+            impl Arguments for $t {
+                fn to_vec(self) -> Vec<Box<dyn Expr>> {
+                    vec![Box::new(self.lit())]
+                }
+            }
+        )*
+    };
 }
 
 impl_args! {
@@ -308,6 +331,17 @@ impl_arg_for_exprs! {
     LikeExpr<E>,
     Field<E, I>,
     Case,
+}
+
+impl_arg_for_literals!(i8, i16, i32, i64, bool, &'static str, f32, f64, String);
+
+impl<T> Arguments for Vec<T>
+where
+    T: Expr + 'static,
+{
+    fn to_vec(self) -> Vec<Box<dyn Expr>> {
+        self.into_iter().map(|x| Box::new(x) as Box<dyn Expr>).collect()
+    }
 }
 
 impl<C> Arguments for ColumnRef<C>

@@ -67,7 +67,7 @@ pub use self::{
     func::{Arguments, Builtin, Call},
     in_::InExt,
     is_::{IsExpr, IsExt},
-    literal::Literal,
+    literal::{AsLit, Literal},
     order::{OrderExpr, OrderExt},
     subquery::{ExistsExpr, ExistsExt, Subquery, SubqueryExt},
     unary::{UnaryExpr, UnaryExt},

@@ -205,4 +205,15 @@ mod test {
 
         println!("{}", s.0);
     }
+
+    #[test]
+    fn test_array_nonnull() {
+        let s = Query::select()
+            .from_table::<Users>()
+            .expr(Builtin::array_agg_nonnull(Users::Id))
+            .expr((1, 2, vec!["test"]).lit())
+            .to_string();
+
+        println!("{}", s.0);
+    }
 }
