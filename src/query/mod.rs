@@ -55,3 +55,50 @@ impl AnyQuery for CallQuery {}
 impl<T: crate::Table> AnyQuery for UpdateQuery<T> {}
 impl<T: crate::Table> AnyQuery for InsertQuery<T> {}
 impl<T: crate::Table> AnyQuery for DeleteQuery<T> {}
+
+#[macro_export]
+macro_rules! indexed_columns {
+    ($(
+        $vis:vis enum $name:ident {
+            $first_table:ident::$first:ident $(= $offset:expr)?
+            $(,$table:ident::$col:ident)*
+            $(,)?
+        }
+    )*) => {$(
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+        #[repr(usize)]
+        $vis enum $name {
+            $first $(= $offset as usize)?,
+
+            $($col,)*
+
+            __OFFSET
+        }
+
+        impl $name {
+            pub const fn offset() -> usize {
+                $name::__OFFSET as usize
+            }
+        }
+
+        impl Default for $name {
+            fn default() -> $name {
+                $name::__OFFSET
+            }
+        }
+
+        impl IntoIterator for $name {
+            type Item = &'static $first_table;
+            type IntoIter = std::slice::Iter<'static, $first_table>;
+
+            fn into_iter(self) -> Self::IntoIter {
+                static ITEMS: &[$first_table] = &[
+                    $first_table::$first,
+                    $($table::$col)*
+                ];
+
+                ITEMS.into_iter()
+            }
+        }
+    )*};
+}

@@ -44,6 +44,16 @@ mod test {
         }
     }
 
+    indexed_columns! {
+        pub enum TestColumns {
+            Messages::Id,
+        }
+
+        pub enum TestColumns2 {
+            Users::Id = TestColumns::offset(),
+        }
+    }
+
     #[test]
     fn test_update() {
         tables! {
