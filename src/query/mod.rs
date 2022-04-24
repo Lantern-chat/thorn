@@ -68,7 +68,7 @@ macro_rules! indexed_columns {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
         #[repr(usize)]
         $vis enum $name {
-            $first $(= $offset as usize)?,
+            $first = 0 $(+ ($offset as usize))?,
 
             $($col,)*
 
@@ -94,7 +94,7 @@ macro_rules! indexed_columns {
             fn into_iter(self) -> Self::IntoIter {
                 static ITEMS: &[$first_table] = &[
                     $first_table::$first,
-                    $($table::$col)*
+                    $($table::$col,)*
                 ];
 
                 ITEMS.into_iter()

@@ -47,10 +47,12 @@ mod test {
     indexed_columns! {
         pub enum TestColumns {
             Messages::Id,
+            Messages::Author,
         }
 
         pub enum TestColumns2 {
             Users::Id = TestColumns::offset(),
+            Users::UserName,
         }
     }
 
