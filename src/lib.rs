@@ -50,8 +50,8 @@ mod test {
             Messages::Author,
         }
 
-        pub enum TestColumns2 {
-            Users::Id = TestColumns::offset(),
+        pub enum TestColumns2 continue TestColumns {
+            Users::Id,
             Users::UserName,
         }
     }
