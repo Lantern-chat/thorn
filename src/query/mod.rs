@@ -64,7 +64,7 @@ macro_rules! indexed_columns {
             $(,$table:ident::$col:ident)*
             $(,)?
         }
-    )*) => {$(
+    )*) => {paste::paste!{$(
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
         #[repr(usize)]
         $vis enum $name {
@@ -82,12 +82,12 @@ macro_rules! indexed_columns {
                 $name::__OFFSET as usize
             }
 
-            pub const fn $first() -> usize {
+            pub const fn [<$first:snake>]() -> usize {
                 Self::$first as usize
             }
 
             $(
-                pub const fn $col() -> usize {
+                pub const fn [<$col:snake>]() -> usize {
                     Self::$col as usize
                 }
             )*
@@ -112,5 +112,5 @@ macro_rules! indexed_columns {
                 ITEMS.into_iter()
             }
         }
-    )*};
+    )*}};
 }
