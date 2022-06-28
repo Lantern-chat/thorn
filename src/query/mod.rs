@@ -59,7 +59,7 @@ impl<T: crate::Table> AnyQuery for DeleteQuery<T> {}
 #[macro_export]
 macro_rules! indexed_columns {
     ($(
-        $vis:vis enum $name:ident $(continue $extends:ident)? {
+        $vis:vis enum $name:ident $(continue $extends:ty)? {
             $first_table:ident::$first:ident
             $(,$table:ident::$col:ident)*
             $(,)?
@@ -68,7 +68,7 @@ macro_rules! indexed_columns {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
         #[repr(usize)]
         $vis enum $name {
-            $first = 0 $(+ ($extends::__OFFSET as usize))?,
+            $first = 0 $(+ (<$extends>::offset() as usize))?,
 
             $($col,)*
 
