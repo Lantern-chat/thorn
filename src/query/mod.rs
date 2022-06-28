@@ -68,17 +68,29 @@ macro_rules! indexed_columns {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
         #[repr(usize)]
         $vis enum $name {
-            $first = 0 $(+ (<$extends>::offset() as usize))?,
+            $first = 0 $(+ (<$extends>::__offset() as usize))?,
 
             $($col,)*
 
+            #[doc(hidden)]
             __OFFSET
         }
 
+        #[allow(non_snake_case)]
         impl $name {
-            pub const fn offset() -> usize {
+            pub const fn __offset() -> usize {
                 $name::__OFFSET as usize
             }
+
+            pub const fn $first() -> usize {
+                Self::$first as usize
+            }
+
+            $(
+                pub const fn $col() -> usize {
+                    Self::$col as usize
+                }
+            )*
         }
 
         impl Default for $name {
