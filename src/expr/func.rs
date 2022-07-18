@@ -246,6 +246,24 @@ decl_builtins! {
 
     GenerateSeries,
     GenerateSubscripts,
+
+    Unnest,
+    ArrayLength,
+    ArrayCat,
+    ArrayAppend,
+    ArrayDims,
+    ArrayFill,
+    ArrayLower,
+    ArrayNdims,
+    ArrayPosition,
+    ArrayPositions,
+    ArrayPrepend,
+    ArrayRemove,
+    ArrayReplace,
+    ArrayUpper,
+    ArrayToString,
+    Cardinality,
+    TrimArray,
 }
 
 impl Builtin {
