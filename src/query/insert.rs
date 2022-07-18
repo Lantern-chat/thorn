@@ -25,6 +25,7 @@ enum Conflict {
     Constraint(&'static str),
     // TODO: Support collations and where statements
     Column(Vec<Box<dyn Column>>),
+    Expr(Vec<Box<dyn Expr>>),
 }
 
 pub struct InsertQuery<T> {
@@ -141,6 +142,24 @@ impl<T: Table> InsertQuery<T> {
         Ok(self)
     }
 
+    pub fn on_expr_conflict<E>(
+        mut self,
+        targets: impl IntoIterator<Item = E>,
+        action: impl Into<ConflictAction>,
+    ) -> Self
+    where
+        E: Expr + 'static,
+    {
+        self.conflict_target = Conflict::Expr(
+            targets
+                .into_iter()
+                .map(|e| Box::new(e) as Box<dyn Expr>)
+                .collect(),
+        );
+        self.conflict_action = Some(action.into());
+        self
+    }
+
     pub fn returning<E>(mut self, expr: E) -> Self
     where
         E: Expr + 'static,
@@ -218,6 +237,23 @@ impl<T: Table> Collectable for InsertQuery<T> {
 
                     for col in cols {
                         write!(w, ", \"{}\"", col.name())?;
+                    }
+
+                    w.write_str(")")?;
+                }
+                Conflict::Expr(ref exprs) => {
+                    w.write_str("(")?;
+
+                    let mut exprs = exprs.iter();
+
+                    match exprs.next() {
+                        Some(first) => first._collect(w, t)?,
+                        None => panic!("Missing conflict targets for insert!"),
+                    }
+
+                    for expr in exprs {
+                        w.write_str(", ")?;
+                        expr._collect(w, t)?;
                     }
 
                     w.write_str(")")?;
