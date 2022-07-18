@@ -147,3 +147,5 @@ pub trait ColumnExt: Column + Sized {
         ColumnExpr { col: self }
     }
 }
+
+impl<C: Column + Sized> ColumnExt for C {}
