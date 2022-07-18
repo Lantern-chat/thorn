@@ -21,7 +21,7 @@ impl Collectable for AnyTable {
 
 const _: Option<&dyn Column> = None;
 
-pub trait Column: Collectable {
+pub trait Column: Collectable + 'static {
     fn name(&self) -> &'static str;
     fn ty(&self) -> pg::Type;
 }
@@ -117,5 +117,33 @@ tables! {
     pub struct TestTable as "tt" in TestSchema {
         Id: Type::INT8,
         UserName: Type::VARCHAR,
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ColumnExpr<C: Column> {
+    col: C,
+}
+
+use crate::expr::*;
+
+impl<C: Column> Expr for ColumnExpr<C> {}
+impl<C: Column> ValueExpr for ColumnExpr<C> {}
+
+impl<C: Column> Arguments for ColumnExpr<C> {
+    fn to_vec(self) -> Vec<Box<dyn Expr>> {
+        vec![Box::new(self)]
+    }
+}
+
+impl<C: Column> Collectable for ColumnExpr<C> {
+    fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
+        write!(w, "\"{}\"", self.col.name())
+    }
+}
+
+pub trait ColumnExt: Column + Sized {
+    fn as_name_only(self) -> ColumnExpr<Self> {
+        ColumnExpr { col: self }
     }
 }
