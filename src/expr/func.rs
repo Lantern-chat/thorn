@@ -26,6 +26,7 @@ macro_rules! decl_builtins {
     }}
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum CallName {
     Builtin(Builtin),
     Custom(Cow<'static, str>),

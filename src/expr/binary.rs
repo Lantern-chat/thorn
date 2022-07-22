@@ -70,6 +70,7 @@ pub trait BinaryExt: Expr + Sized {
 
 impl<T> BinaryExt for T where T: ValueExpr {}
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BinaryExpr<Lhs, Rhs> {
     lhs: Lhs,
     rhs: Rhs,

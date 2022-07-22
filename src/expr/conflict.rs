@@ -5,8 +5,10 @@ use crate::{
 
 use super::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DoNothing;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DoUpdate;
 
 pub struct DoUpdateSet {

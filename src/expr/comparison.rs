@@ -62,6 +62,7 @@ pub trait CompExt: Expr + Sized {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CompExpr<Lhs, Rhs> {
     lhs: Lhs,
     rhs: Rhs,

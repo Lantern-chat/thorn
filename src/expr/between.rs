@@ -33,6 +33,7 @@ pub trait BetweenExt: Expr + Sized {
 
 impl<T> BetweenExt for T where T: ValueExpr {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BetweenExpr<X, A, B> {
     x: X,
     a: A,

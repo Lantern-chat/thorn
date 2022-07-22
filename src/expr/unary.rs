@@ -34,6 +34,7 @@ pub trait UnaryExt: Expr + Sized {
 
 impl<T> UnaryExt for T where T: ValueExpr {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnaryExpr<V> {
     value: V,
     op: UnaryOp,

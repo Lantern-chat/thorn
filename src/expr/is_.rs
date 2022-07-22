@@ -50,6 +50,7 @@ pub trait IsExt: Expr + Sized {
 
 impl<T> IsExt for T where T: ValueExpr {}
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct IsExpr<V> {
     value: V,
     op: IsOp,

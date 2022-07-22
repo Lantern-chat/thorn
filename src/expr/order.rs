@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NullOrder {
     None,
     First,
@@ -8,12 +8,13 @@ pub(crate) enum NullOrder {
 }
 
 // TODO: USING operator
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Order {
     Ascending(NullOrder),
     Descending(NullOrder),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OrderExpr<E> {
     pub(crate) inner: E,
     pub(crate) order: Order,

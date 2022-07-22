@@ -4,6 +4,7 @@ use crate::name::NameError;
 
 use super::*;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RenamedExpr<E> {
     inner: E,
     name: &'static str,
