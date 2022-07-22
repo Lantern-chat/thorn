@@ -43,6 +43,7 @@ where
 pub mod as_;
 pub mod between;
 pub mod binary;
+pub mod bits;
 pub mod case;
 pub mod comparison;
 pub mod conflict;
@@ -61,6 +62,7 @@ pub use self::{
     as_::{RenamedExpr, RenamedExt},
     between::{BetweenExpr, BetweenExt},
     binary::{BinaryExpr, BinaryExt},
+    bits::BitsExt,
     case::{Case, If},
     comparison::{CompExpr, CompExt},
     conflict::{DoNothing, DoUpdate},
