@@ -5,9 +5,13 @@ pub extern crate postgres_types as pg;
 #[doc(hidden)]
 pub extern crate paste;
 
+#[doc(hidden)]
+pub extern crate generic_array as ga;
+
 pub mod collect;
 pub mod expr;
 pub mod name;
+pub mod params;
 pub mod query;
 pub mod ty;
 
@@ -19,6 +23,7 @@ pub mod enums;
 
 pub use collect::Collectable;
 pub use expr::{Expr, *};
+pub use params::Parameters;
 pub use query::{AnyQuery, Lateral, Query, TableAsExt, TableJoinExt, WithableQueryExt};
 pub use table::Table;
 
@@ -44,6 +49,14 @@ mod test {
         }
     }
 
+    params! {
+        #[derive(Debug, Clone)]
+        pub struct Test<'a> {
+            pub user_id: &'a i32 = Users::Id,
+            pub author: String = Messages::Author,
+        }
+    }
+
     indexed_columns! {
         pub enum TestColumns {
             Messages::Id,
@@ -58,6 +71,8 @@ mod test {
 
     #[test]
     fn test_update() {
+        let x = TestColumns2::user_name();
+
         tables! {
             struct Temp {
                 _Id: Type::INT4,
