@@ -6,6 +6,18 @@ pub trait Parameters {
     fn as_params<'a>(&'a self) -> ga::GenericArray<&'a (dyn ToSql + Sync), Self::LEN>;
 }
 
+impl<T> Parameters for &T
+where
+    T: Parameters,
+{
+    type LEN = <T as Parameters>::LEN;
+
+    #[inline]
+    fn as_params<'a>(&'a self) -> ga::GenericArray<&'a (dyn ToSql + Sync), Self::LEN> {
+        <T as Parameters>::as_params(*self)
+    }
+}
+
 #[macro_export]
 macro_rules! params {
     (@COUNT ) => ($crate::ga::typenum::U0);
