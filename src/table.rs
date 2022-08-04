@@ -149,7 +149,7 @@ pub trait TableAlias: 'static {
     const NAME: &'static str;
 }
 
-pub struct Alias<A: TableAlias>(A::T);
+pub struct Alias<A: TableAlias>(pub A::T);
 
 impl<A: TableAlias> Copy for Alias<A> {}
 impl<A: TableAlias> Clone for Alias<A> {
