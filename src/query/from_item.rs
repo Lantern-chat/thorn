@@ -28,9 +28,11 @@ impl<T: Table> Collectable for TableRef<T> {
     fn collect(&self, w: &mut dyn Write, _: &mut Collector) -> fmt::Result {
         use crate::name::Schema;
 
-        match T::SCHEMA {
-            Schema::None => write!(w, "\"{}\"", T::NAME.name()),
-            Schema::Named(name) => write!(w, "\"{}\".\"{}\"", name, T::NAME.name()),
+        match (T::ALIAS, T::SCHEMA) {
+            (None, Schema::None) => write!(w, "\"{}\"", T::NAME.name()),
+            (None, Schema::Named(name)) => write!(w, "\"{}\".\"{}\"", name, T::NAME.name()),
+            (Some(alias), Schema::None) => write!(w, "\"{}\" AS {alias}", T::NAME.name()),
+            (Some(alias), Schema::Named(name)) => write!(w, "\"{}\".\"{}\" AS {alias}", name, T::NAME.name()),
         }
     }
 }

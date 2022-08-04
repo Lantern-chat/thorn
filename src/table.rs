@@ -29,20 +29,14 @@ pub trait Column: Collectable + 'static {
 pub trait Table: Clone + Copy + Column + Sized + 'static {
     const SCHEMA: Schema;
     const NAME: Name;
-    const COLUMNS: &'static [Self];
+    const ALIAS: Option<&'static str>;
+    //const COLUMNS: &'static [Self];
 
     fn to_any() -> AnyTable {
         AnyTable {
             schema: Self::SCHEMA,
             name: Self::NAME,
             //columns: Self::COLUMNS.iter().map(|c| c as _).collect(),
-        }
-    }
-
-    fn full_name() -> String {
-        match Self::SCHEMA {
-            Schema::None => format!("\"{}\"", Self::NAME.name()),
-            Schema::Named(name) => format!("\"{}\".\"{}\"", name, Self::NAME.name()),
         }
     }
 }
@@ -63,7 +57,7 @@ macro_rules! tables {
                 $(.set(stringify!([<$schema:snake>])))?;
 
             const NAME: $crate::name::Name = $crate::name::Name::Default(stringify!([<$table:snake>])) $(.custom($rename))?;
-            const COLUMNS: &'static [Self] = &[$($table::$field_name),*];
+            const ALIAS: Option<&'static str> = None;
         }
 
         impl $crate::table::Column for $table {
@@ -149,3 +143,69 @@ pub trait ColumnExt: Column + Sized {
 }
 
 impl<C: Column + Sized> ColumnExt for C {}
+
+pub trait TableAlias: 'static {
+    type T: Table;
+    const NAME: &'static str;
+}
+
+pub struct Alias<A: TableAlias>(A::T);
+
+impl<A: TableAlias> Copy for Alias<A> {}
+impl<A: TableAlias> Clone for Alias<A> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+#[macro_export]
+macro_rules! decl_alias {
+    ($($vis:vis $dst:ident = $src:ty),+) => {
+        paste::paste! {$(
+            #[doc(hidden)]
+            mod [<__private_ $dst:snake _impl>] {
+                use super::*;
+
+                pub struct $dst;
+                impl $crate::table::TableAlias for $dst {
+                    type T = $src;
+                    const NAME: &'static str = stringify!([<$dst:snake>]);
+                }
+
+                pub type Inner = $crate::table::Alias<$dst>;
+            }
+
+            $vis use [<__private_ $dst:snake _impl>]::Inner as $dst;
+        )*}
+    };
+}
+
+impl<A: TableAlias> Column for Alias<A> {
+    fn name(&self) -> &'static str {
+        self.0.name()
+    }
+    fn ty(&self) -> pg::Type {
+        self.0.ty()
+    }
+}
+
+impl<A: TableAlias> Table for Alias<A> {
+    const SCHEMA: Schema = <A::T as Table>::SCHEMA;
+    const NAME: Name = <A::T as Table>::NAME;
+    const ALIAS: Option<&'static str> = Some(A::NAME);
+}
+
+impl<A: TableAlias> Collectable for Alias<A> {
+    fn collect(&self, w: &mut dyn Write, _t: &mut Collector) -> fmt::Result {
+        write!(w, "\"{}\".\"{}\"", A::NAME, self.name())
+    }
+}
+
+impl<A: TableAlias> Expr for Alias<A> {}
+impl<A: TableAlias> ValueExpr for Alias<A> {}
+
+impl<A: TableAlias> Arguments for Alias<A> {
+    fn to_vec(self) -> Vec<Box<dyn Expr>> {
+        vec![Box::new(self)]
+    }
+}
