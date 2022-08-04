@@ -209,3 +209,9 @@ impl<A: TableAlias> Arguments for Alias<A> {
         vec![Box::new(self)]
     }
 }
+
+impl<A: TableAlias> Alias<A> {
+    pub const fn col(col: A::T) -> Self {
+        Alias(col)
+    }
+}
