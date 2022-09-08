@@ -1,6 +1,7 @@
 use crate::{
     query::{update::Value, UpdateQuery},
     table::Column,
+    util::collect_delimited,
 };
 
 use super::*;
@@ -13,6 +14,7 @@ pub struct DoUpdate;
 
 pub struct DoUpdateSet {
     sets: Vec<(Box<dyn Column>, Value)>,
+    wheres: Vec<Box<dyn Expr>>,
 }
 
 impl DoUpdate {
@@ -23,6 +25,7 @@ impl DoUpdate {
     {
         DoUpdateSet {
             sets: vec![(Box::new(col), Value::Value(Box::new(value)))],
+            wheres: Vec::new(),
         }
     }
 
@@ -32,6 +35,7 @@ impl DoUpdate {
     {
         DoUpdateSet {
             sets: vec![(Box::new(col), Value::Default)],
+            wheres: Vec::new(),
         }
     }
 }
@@ -51,6 +55,14 @@ impl DoUpdateSet {
         C: Column + 'static,
     {
         self.sets.push((Box::new(col), Value::Default));
+        self
+    }
+
+    pub fn and_where<E>(mut self, cond: E) -> Self
+    where
+        E: BooleanExpr + 'static,
+    {
+        self.wheres.push(Box::new(cond));
         self
     }
 }
@@ -74,6 +86,12 @@ impl Collectable for DoUpdateSet {
                 write!(w, ", \"{}\" = ", col.name())?;
                 val.collect(w, t)?;
             }
+        }
+
+        // WHERE
+        if !self.wheres.is_empty() {
+            w.write_str(" WHERE ")?;
+            collect_delimited(&self.wheres, self.wheres.len() > 1, " AND ", w, t)?;
         }
 
         Ok(())
