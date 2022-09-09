@@ -103,12 +103,16 @@ impl Call {
 impl ValueExpr for Call {}
 impl Expr for Call {}
 impl Collectable for Call {
+    #[rustfmt::skip]
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
-        let name = match self.name {
-            CallName::Builtin(b) => b.name(),
-            CallName::Custom(ref name) => &*name,
-        };
-        write!(w, "{}(", name)?;
+        if let CallName::Builtin(Builtin::Array) = self.name {
+            w.write_str("ARRAY[")?;
+        } else {
+            write!(w, "{}(", match self.name {
+                CallName::Builtin(b) => b.name(),
+                CallName::Custom(ref name) => &*name,
+            })?;
+        }
 
         let mut args = self.args.iter();
         if let Some(arg) = args.next() {
@@ -119,11 +123,15 @@ impl Collectable for Call {
             arg._collect(w, t)?;
         }
 
-        w.write_str(")")
+        w.write_str(match self.name {
+            CallName::Builtin(Builtin::Array) => "]",
+            _ => ")",
+        })
     }
 }
 
 decl_builtins! {
+    Array,
     Coalesce,
     Nullif,
     Any,
