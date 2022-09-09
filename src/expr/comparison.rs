@@ -12,6 +12,9 @@ enum ComparisonOp {
     IsNotDistinctFrom,
     LogicalAnd,
     LogicalOr,
+    Contains,
+    IsContainedBy,
+    Overlaps,
 }
 
 pub trait ComparableExpr: Collectable {}
@@ -60,6 +63,18 @@ pub trait CompExt: Expr + Sized {
     fn or<Rhs>(self, rhs: Rhs) -> CompExpr<Self, Rhs> {
         CompExpr { lhs: self, rhs, op: ComparisonOp::LogicalOr }
     }
+    #[inline]
+    fn contains<Rhs>(self, rhs: Rhs) -> CompExpr<Self, Rhs> {
+        CompExpr { lhs: self, rhs, op: ComparisonOp::Contains }
+    }
+    #[inline]
+    fn is_contained_by<Rhs>(self, rhs: Rhs) -> CompExpr<Self, Rhs> {
+        CompExpr { lhs: self, rhs, op: ComparisonOp::IsContainedBy }
+    }
+    #[inline]
+    fn overlaps<Rhs>(self, rhs: Rhs) -> CompExpr<Self, Rhs> {
+        CompExpr { lhs: self, rhs, op: ComparisonOp::Overlaps }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,6 +107,9 @@ impl<Lhs: ComparableExpr, Rhs: ComparableExpr> Collectable for CompExpr<Lhs, Rhs
             ComparisonOp::IsNotDistinctFrom => "IS NOT DISTINCT FROM",
             ComparisonOp::LogicalAnd => "AND",
             ComparisonOp::LogicalOr => "OR",
+            ComparisonOp::Contains => "@>",
+            ComparisonOp::IsContainedBy => "<@",
+            ComparisonOp::Overlaps => "&&",
         })?;
 
         w.write_str(" ")?;
