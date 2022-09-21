@@ -1,5 +1,7 @@
 use std::fmt::{self, Write};
-use std::{collections::HashMap, marker::PhantomData};
+use std::marker::PhantomData;
+
+use indexmap::IndexMap;
 
 use crate::{
     collect::{Collectable, Collector},
@@ -15,7 +17,7 @@ pub struct WithQueryBuilder;
 
 #[derive(Default)]
 pub struct WithQuery {
-    pub(crate) queries: HashMap<&'static str, (bool, Box<dyn Collectable>)>,
+    pub(crate) queries: IndexMap<&'static str, (bool, Box<dyn Collectable>)>,
     pub(crate) recursive: bool,
 }
 

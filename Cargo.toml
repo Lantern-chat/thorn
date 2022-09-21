@@ -11,3 +11,4 @@ postgres-types = { version = "0.2", features = ["derive"] }
 paste = "1"
 thiserror = "1.0.24"
 generic-array = "0.14.5"
+indexmap = "1.9.1"
