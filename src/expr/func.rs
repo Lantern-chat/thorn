@@ -135,6 +135,8 @@ decl_builtins! {
     Coalesce,
     Nullif,
     Any,
+    All,
+    Some,
 
     Greatest,
     Least,
