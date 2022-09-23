@@ -122,6 +122,10 @@ impl<T: Table> UpdateQuery<T> {
 }
 
 impl<T: Table> Collectable for UpdateQuery<T> {
+    fn needs_wrapping(&self) -> bool {
+        true
+    }
+
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         use crate::expr::util::collect_delimited;
 
