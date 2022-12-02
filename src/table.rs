@@ -90,7 +90,7 @@ macro_rules! tables {
 
             fn comment(&self) -> &'static str {
                 match *self {
-                    $($table::$field_name => tables!(@DOC_START $(#[$($field_meta)*])*)),*
+                    $($table::$field_name => $crate::tables!(@DOC_START $(#[$($field_meta)*])*)),*
                 }
             }
         }
