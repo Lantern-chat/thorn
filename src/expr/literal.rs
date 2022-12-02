@@ -29,6 +29,7 @@ literals! {
     TextStr: &'static str,
     TextString: String,
     Array: Vec<Literal>,
+    Null: (),
 }
 
 impl ValueExpr for Literal {}
@@ -42,6 +43,7 @@ impl Collectable for Literal {
 impl Literal {
     fn collect_nested(&self, w: &mut dyn Write, t: &mut Collector, depth: usize) -> fmt::Result {
         match *self {
+            Literal::Null(()) => w.write_str("NULL"),
             Literal::Bool(v) => w.write_str(match v {
                 true => "TRUE",
                 false => "FALSE",
@@ -118,6 +120,7 @@ fn write_escaped_string_nested(string: &str, w: &mut dyn Write) -> fmt::Result {
 }
 
 impl Literal {
+    pub const NULL: Literal = Literal::Null(());
     pub const TRUE: Literal = Literal::Bool(true);
     pub const FALSE: Literal = Literal::Bool(false);
     pub const EMPTY_ARRAY: Literal = Literal::Array(Vec::new());

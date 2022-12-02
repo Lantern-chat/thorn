@@ -24,13 +24,14 @@ const _: Option<&dyn Column> = None;
 pub trait Column: Collectable + 'static {
     fn name(&self) -> &'static str;
     fn ty(&self) -> pg::Type;
+    fn comment(&self) -> &'static str;
 }
 
 pub trait Table: Clone + Copy + Column + Sized + 'static {
     const SCHEMA: Schema;
     const NAME: Name;
     const ALIAS: Option<&'static str>;
-    //const COLUMNS: &'static [Self];
+    const COMMENT: &'static str;
 
     fn to_any() -> AnyTable {
         AnyTable {
@@ -43,13 +44,20 @@ pub trait Table: Clone + Copy + Column + Sized + 'static {
 
 #[macro_export]
 macro_rules! tables {
-    ($($(#[$meta:meta])* $struct_vis:vis struct $table:ident $(as $rename:tt)? $(in $schema:ident)? {$(
-        $(#[$field_meta:meta])* $field_name:ident: $ty:expr
+    (@DOC #[doc = $doc:literal]) => { concat!($doc, "\n") };
+    (@DOC #[$meta:meta]) => {""};
+
+    (@DOC_START $(# $meta:tt)*) => {
+        concat!($(tables!(@DOC # $meta)),*)
+    };
+
+    ($($(#[$($meta:tt)*])* $struct_vis:vis struct $table:ident $(as $rename:tt)? $(in $schema:ident)? {$(
+        $(#[$($field_meta:tt)*])* $field_name:ident: $ty:expr
     ),*$(,)?})*) => {$crate::paste::paste! {$(
-        $(#[$meta])*
+        $(#[$($meta)*])*
         #[derive(Clone, Copy, PartialEq, Eq, Hash)]
         $struct_vis enum $table {
-            $($(#[$field_meta])* $field_name,)*
+            $($(#[$($field_meta)*])* $field_name,)*
         }
 
         impl $crate::Table for $table {
@@ -58,6 +66,11 @@ macro_rules! tables {
 
             const NAME: $crate::name::Name = $crate::name::Name::Default(stringify!([<$table:snake>])) $(.custom($rename))?;
             const ALIAS: Option<&'static str> = None;
+            const COMMENT: &'static str = tables!(@DOC_START $(#[$($meta)*])*);
+        }
+
+        impl $crate::RealTable for $table {
+            const COLUMNS: &'static [Self] = &[$($table::$field_name,)*];
         }
 
         impl $crate::table::Column for $table {
@@ -72,6 +85,12 @@ macro_rules! tables {
             fn ty(&self) -> $crate::pg::Type {
                 match *self {
                     $($table::$field_name => $crate::pg::Type::from($ty)),*
+                }
+            }
+
+            fn comment(&self) -> &'static str {
+                match *self {
+                    $($table::$field_name => tables!(@DOC_START $(#[$($field_meta)*])*)),*
                 }
             }
         }
@@ -107,10 +126,14 @@ macro_rules! tables {
 use pg::Type;
 
 tables! {
+    /// This is a test table
+    /// Testing
     #[derive(Debug)]
     pub struct TestTable as "tt" in TestSchema {
+        /// Some identifier
         Id: Type::INT8,
-        UserName: Type::VARCHAR,
+        /// Username
+        UserName: Type::TEXT,
     }
 }
 
@@ -187,12 +210,16 @@ impl<A: TableAlias> Column for Alias<A> {
     fn ty(&self) -> pg::Type {
         self.0.ty()
     }
+    fn comment(&self) -> &'static str {
+        self.0.comment()
+    }
 }
 
 impl<A: TableAlias> Table for Alias<A> {
     const SCHEMA: Schema = <A::T as Table>::SCHEMA;
     const NAME: Name = <A::T as Table>::NAME;
     const ALIAS: Option<&'static str> = Some(A::NAME);
+    const COMMENT: &'static str = <A::T as Table>::COMMENT;
 }
 
 impl<A: TableAlias> Collectable for Alias<A> {
@@ -213,5 +240,78 @@ impl<A: TableAlias> Arguments for Alias<A> {
 impl<A: TableAlias> Alias<A> {
     pub const fn col(col: A::T) -> Self {
         Alias(col)
+    }
+}
+
+tables! {
+    struct SchemaColumns as "columns" in InformationSchema {
+        TableName: Type::TEXT,
+        TableSchema: Type::TEXT,
+        ColumnName: Type::TEXT,
+        UdtName: Type::TEXT,
+    }
+
+    pub struct TableParameters {
+        TableName: Type::TEXT,
+        TableSchema: Type::TEXT,
+        ColumnName: Type::TEXT,
+        UdtName: Type::TEXT,
+    }
+}
+
+pub trait RealTable: Table {
+    const COLUMNS: &'static [Self];
+
+    /// Generates a query that will attempt to verify the table schema for each column by
+    /// cross-referencing with PostgreSQL's `information_schema.columns` table.
+    ///
+    /// Returns `[bool, text, text, text]` for `[matches, column_name, table_name, table_schema]`
+    ///
+    /// If all of the first column are true, the database schema at least matches the Rust representation.
+    fn verify() -> crate::query::SelectQuery {
+        use crate::*;
+
+        let column_names =
+            Literal::Array(Self::COLUMNS.iter().map(|c| c.name().lit()).collect()).cast(Type::TEXT_ARRAY);
+
+        let column_types = Literal::Array(
+            Self::COLUMNS
+                .iter()
+                .map(|c| c.ty().name().to_owned().lit())
+                .collect(),
+        )
+        .cast(Type::TEXT_ARRAY);
+
+        let table_schema = match Self::SCHEMA {
+            Schema::None => Literal::NULL,
+            Schema::Named(schema) => Literal::TextStr(schema),
+        };
+
+        let table_params = TableParameters::as_query(
+            Query::select()
+                .expr(table_schema.alias_to(TableParameters::TableSchema))
+                .expr(Self::NAME.name().lit().alias_to(TableParameters::TableName))
+                .expr(Builtin::unnest((column_names,)).alias_to(TableParameters::ColumnName))
+                .expr(Builtin::unnest((column_types,)).alias_to(TableParameters::UdtName)),
+        );
+
+        Query::select()
+            .with(table_params.exclude())
+            .from(
+                TableParameters::left_join_table::<SchemaColumns>().on(SchemaColumns::TableName
+                    .equals(TableParameters::TableName)
+                    .and(SchemaColumns::ColumnName.equals(TableParameters::ColumnName))
+                    .and(
+                        SchemaColumns::TableSchema
+                            .equals(TableParameters::TableSchema)
+                            .or(TableParameters::TableSchema.is_null()),
+                    )),
+            )
+            .expr(TableParameters::UdtName.equals(SchemaColumns::UdtName))
+            .cols(&[
+                TableParameters::ColumnName,
+                TableParameters::TableSchema,
+                TableParameters::TableName,
+            ])
     }
 }
