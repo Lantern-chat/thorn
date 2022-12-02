@@ -48,7 +48,7 @@ macro_rules! tables {
     (@DOC #[$meta:meta]) => {""};
 
     (@DOC_START $(# $meta:tt)*) => {
-        concat!($(tables!(@DOC # $meta)),*)
+        concat!($($crate::tables!(@DOC # $meta)),*)
     };
 
     ($($(#[$($meta:tt)*])* $struct_vis:vis struct $table:ident $(as $rename:tt)? $(in $schema:ident)? {$(
@@ -66,7 +66,7 @@ macro_rules! tables {
 
             const NAME: $crate::name::Name = $crate::name::Name::Default(stringify!([<$table:snake>])) $(.custom($rename))?;
             const ALIAS: Option<&'static str> = None;
-            const COMMENT: &'static str = tables!(@DOC_START $(#[$($meta)*])*);
+            const COMMENT: &'static str = $crate::tables!(@DOC_START $(#[$($meta)*])*);
         }
 
         impl $crate::table::RealTable for $table {
