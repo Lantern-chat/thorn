@@ -69,7 +69,7 @@ macro_rules! tables {
             const COMMENT: &'static str = tables!(@DOC_START $(#[$($meta)*])*);
         }
 
-        impl $crate::RealTable for $table {
+        impl $crate::table::RealTable for $table {
             const COLUMNS: &'static [Self] = &[$($table::$field_name,)*];
         }
 
