@@ -265,7 +265,7 @@ pub trait RealTable: Table {
     /// Generates a query that will attempt to verify the table schema for each column by
     /// cross-referencing with PostgreSQL's `information_schema.columns` table.
     ///
-    /// Returns `[bool, text, text, text]` for `[matches, column_name, table_name, table_schema]`
+    /// Returns `[bool, text, text, text, text, text]` for `[matches, column_name, table_name, table_schema, expected_udt, found_udt]`
     ///
     /// If all of the first column are true, the database schema at least matches the Rust representation.
     fn verify() -> crate::query::SelectQuery {
@@ -310,8 +310,10 @@ pub trait RealTable: Table {
             .expr(TableParameters::UdtName.equals(SchemaColumns::UdtName))
             .cols(&[
                 TableParameters::ColumnName,
-                TableParameters::TableSchema,
                 TableParameters::TableName,
+                TableParameters::TableSchema,
+                TableParameters::UdtName,
             ])
+            .col(SchemaColumns::UdtName)
     }
 }
