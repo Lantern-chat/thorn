@@ -14,6 +14,9 @@ pub trait EnumType: Collectable + Clone + Copy + Sized + 'static {
             Schema::Named(name) => format!("\"{}\".\"{}\"", name, Self::NAME.name()),
         }
     }
+
+    /// Create a new [pg::Type] instance with the given oid value.
+    fn ty(oid: u32) -> pg::Type;
 }
 
 /// Wrapper around `#[derive(ToSql, FromSql)]` that adds snake_case names and renaming
@@ -38,6 +41,15 @@ macro_rules! enums {
 
             const NAME: $crate::name::Name = $crate::name::Name::Default(stringify!([<$name:snake>])) $(.custom($rename))?;
             const VARIANTS: &'static [Self] = &[$($name::$variant),*];
+
+            fn ty(oid: u32) -> pg::Type {
+                pg::Type::new(
+                    Self::NAME.name().to_owned(),
+                    oid,
+                    pg::Kind::Enum(vec![$( stringify!([<$variant:snake>]).to_owned() ),*]),
+                    concat!("" $(, stringify!([<$schema:snake>]))?).to_owned()
+                )
+            }
         }
 
         impl $crate::collect::Collectable for $name {

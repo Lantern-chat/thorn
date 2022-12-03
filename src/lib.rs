@@ -49,6 +49,20 @@ mod test {
         }
     }
 
+    enums! {
+        pub enum EventCode in TestSchema {
+            MessageCreate,
+            MessageUpdate,
+            MessageDelete,
+        }
+
+        pub enum EventCode2 as "event_code3" {
+            MessageCreate,
+            MessageUpdate,
+            MessageDelete,
+        }
+    }
+
     params! {
         #[derive(Debug, Clone)]
         pub struct Test<'a> {
