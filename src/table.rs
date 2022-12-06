@@ -1,5 +1,30 @@
 use super::name::{Name, Schema};
 
+pub struct ColumnType {
+    pub pg: pg::Type,
+    pub nullable: bool,
+}
+
+#[repr(transparent)]
+pub struct Nullable<T>(pub T);
+
+impl<T> From<Nullable<T>> for ColumnType
+where
+    T: Into<ColumnType>,
+{
+    fn from(ty: Nullable<T>) -> Self {
+        let mut ty = ty.0.into();
+        ty.nullable = true;
+        ty
+    }
+}
+
+impl From<pg::Type> for ColumnType {
+    fn from(pg: pg::Type) -> Self {
+        ColumnType { pg, nullable: false }
+    }
+}
+
 // WIP: Note sure what I'll do with this yet.
 pub struct AnyTable {
     schema: Schema,
@@ -23,7 +48,7 @@ const _: Option<&dyn Column> = None;
 
 pub trait Column: Collectable + 'static {
     fn name(&self) -> &'static str;
-    fn ty(&self) -> pg::Type;
+    fn ty(&self) -> ColumnType;
     fn comment(&self) -> &'static str;
 }
 
@@ -82,9 +107,9 @@ macro_rules! tables {
             }
 
             #[inline]
-            fn ty(&self) -> $crate::pg::Type {
+            fn ty(&self) -> $crate::table::ColumnType {
                 match *self {
-                    $($table::$field_name => $crate::pg::Type::from($ty)),*
+                    $($table::$field_name => $crate::table::ColumnType::from($ty)),*
                 }
             }
 
@@ -95,12 +120,21 @@ macro_rules! tables {
             }
         }
 
-        impl From<$table> for $crate::pg::Type {
+        impl From<$table> for $crate::table::ColumnType {
             #[inline]
             fn from(t: $table) -> Self {
                 use $crate::table::{Table, Column};
 
                 t.ty()
+            }
+        }
+
+        impl From<$table> for $crate::pg::Type {
+            #[inline]
+            fn from(t: $table) -> Self {
+                use $crate::table::{Table, Column};
+
+                t.ty().pg
             }
         }
 
@@ -207,7 +241,7 @@ impl<A: TableAlias> Column for Alias<A> {
     fn name(&self) -> &'static str {
         self.0.name()
     }
-    fn ty(&self) -> pg::Type {
+    fn ty(&self) -> ColumnType {
         self.0.ty()
     }
     fn comment(&self) -> &'static str {
@@ -244,18 +278,22 @@ impl<A: TableAlias> Alias<A> {
 }
 
 tables! {
-    struct SchemaColumns as "columns" in InformationSchema {
-        TableName: Type::TEXT,
-        TableSchema: Type::TEXT,
-        ColumnName: Type::TEXT,
-        UdtName: Type::TEXT,
+    pub(crate) struct SchemaColumns as "columns" in InformationSchema {
+        TableName: Type::NAME,
+        TableSchema: Type::NAME,
+        ColumnName: Type::NAME,
+        UdtName: Type::NAME,
+        UdtSchema: Type::NAME,
+        IsNullable: Type::BOOL,
+        OrdinalPosition: Type::INT4,
     }
 
     pub struct TableParameters {
-        TableName: Type::TEXT,
-        TableSchema: Type::TEXT,
-        ColumnName: Type::TEXT,
-        UdtName: Type::TEXT,
+        TableName: Type::NAME,
+        TableSchema: Type::NAME,
+        ColumnName: Type::NAME,
+        UdtName: Type::NAME,
+        IsNullable: Type::BOOL,
     }
 }
 
@@ -265,7 +303,19 @@ pub trait RealTable: Table {
     /// Generates a query that will attempt to verify the table schema for each column by
     /// cross-referencing with PostgreSQL's `information_schema.columns` table.
     ///
-    /// Returns `[bool, text, text, text, text, text]` for `[matches, column_name, table_name, table_schema, expected_udt, found_udt]`
+    /// Returns
+    /// ```
+    /// [
+    ///     matches: bool,
+    ///     column_name: text,
+    ///     table_name: text,
+    ///     table_schema: text,
+    ///     expected_udt: text,
+    ///     expected_nullable: bool,
+    ///     found_udt: text,
+    ///     found_nullable: bool
+    /// ]
+    /// ```
     ///
     /// If all of the first column are true, the database schema at least matches the Rust representation.
     fn verify() -> crate::query::SelectQuery {
@@ -277,10 +327,13 @@ pub trait RealTable: Table {
         let column_types = Literal::Array(
             Self::COLUMNS
                 .iter()
-                .map(|c| c.ty().name().to_owned().lit())
+                .map(|c| c.ty().pg.name().to_owned().lit())
                 .collect(),
         )
         .cast(Type::TEXT_ARRAY);
+
+        let column_nullable = Literal::Array(Self::COLUMNS.iter().map(|c| c.ty().nullable.lit()).collect())
+            .cast(Type::BOOL_ARRAY);
 
         let table_schema = match Self::SCHEMA {
             Schema::None => Literal::NULL,
@@ -292,7 +345,8 @@ pub trait RealTable: Table {
                 .expr(table_schema.alias_to(TableParameters::TableSchema))
                 .expr(Self::NAME.name().lit().alias_to(TableParameters::TableName))
                 .expr(Builtin::unnest((column_names,)).alias_to(TableParameters::ColumnName))
-                .expr(Builtin::unnest((column_types,)).alias_to(TableParameters::UdtName)),
+                .expr(Builtin::unnest((column_types,)).alias_to(TableParameters::UdtName))
+                .expr(Builtin::unnest((column_nullable,)).alias_to(TableParameters::IsNullable)),
         );
 
         Query::select()
@@ -307,13 +361,18 @@ pub trait RealTable: Table {
                             .or(TableParameters::TableSchema.is_null()),
                     )),
             )
-            .expr(TableParameters::UdtName.equals(SchemaColumns::UdtName))
+            .expr(
+                TableParameters::UdtName
+                    .equals(SchemaColumns::UdtName)
+                    .and(TableParameters::IsNullable.equals(SchemaColumns::IsNullable)),
+            )
             .cols(&[
                 TableParameters::ColumnName,
                 TableParameters::TableName,
                 TableParameters::TableSchema,
                 TableParameters::UdtName,
+                TableParameters::IsNullable,
             ])
-            .col(SchemaColumns::UdtName)
+            .cols(&[SchemaColumns::UdtName, SchemaColumns::IsNullable])
     }
 }

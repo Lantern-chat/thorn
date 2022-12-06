@@ -15,11 +15,17 @@ pub mod params;
 pub mod query;
 pub mod ty;
 
+#[cfg(feature = "generate")]
+pub mod generate;
+
 #[macro_use]
 pub mod table;
 
 #[macro_use]
 pub mod enums;
+
+#[macro_use]
+pub mod func;
 
 pub use collect::Collectable;
 pub use expr::{Expr, *};

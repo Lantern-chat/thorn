@@ -8,6 +8,15 @@ pub struct Case {
 }
 
 impl Case {
+    pub fn ternary<E, T, F>(cond: E, on_true: T, on_false: F) -> Self
+    where
+        E: ValueExpr + 'static,
+        T: ValueExpr + 'static,
+        F: ValueExpr + 'static,
+    {
+        Self::default().when(cond, on_true).otherwise(on_false)
+    }
+
     pub fn case<E>(expr: E) -> Self
     where
         E: ValueExpr + 'static,
