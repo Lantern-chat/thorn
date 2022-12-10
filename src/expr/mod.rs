@@ -40,6 +40,7 @@ where
 {
 }
 
+pub mod access;
 pub mod as_;
 pub mod between;
 pub mod binary;
@@ -59,6 +60,7 @@ pub mod window;
 pub(crate) mod util;
 
 pub use self::{
+    access::AccessExt,
     as_::{RenamedExpr, RenamedExt},
     between::{BetweenExpr, BetweenExt},
     binary::{BinaryExpr, BinaryExt},
