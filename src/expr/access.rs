@@ -18,6 +18,10 @@ pub struct Access<E, I> {
 impl<E: ValueExpr, I: ValueExpr> ValueExpr for Access<E, I> {}
 impl<E: ValueExpr, I: ValueExpr> Expr for Access<E, I> {}
 impl<E: ValueExpr, I: ValueExpr> Collectable for Access<E, I> {
+    fn needs_wrapping(&self) -> bool {
+        self.op != AccessOp::Array
+    }
+
     fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
         self.value._collect(w, t)?;
 
