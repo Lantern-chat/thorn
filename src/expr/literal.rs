@@ -55,7 +55,7 @@ impl Literal {
             Literal::Float4(v) => write!(w, "{}", v),
             Literal::Float8(v) => write!(w, "{}", v),
             Literal::TextStr(v) => write_escaped_string_quoted(v, w),
-            Literal::TextString(ref v) => write_escaped_string_quoted(&v, w),
+            Literal::TextString(ref v) => write_escaped_string_quoted(v, w),
             Literal::Array(ref v) => {
                 if depth == 0 {
                     w.write_str("'")?;
@@ -63,9 +63,7 @@ impl Literal {
 
                 w.write_str("{")?;
 
-                let mut i = 0;
-
-                for lit in v {
+                for (i, lit) in v.iter().enumerate() {
                     if i > 0 {
                         w.write_str(", ")?;
                     }
@@ -75,8 +73,6 @@ impl Literal {
                         Literal::TextString(ref s) => write_escaped_string_nested(s, w)?,
                         _ => lit.collect_nested(w, t, depth + 1)?,
                     }
-
-                    i += 1;
                 }
 
                 w.write_str("}")?;
@@ -92,15 +88,15 @@ impl Literal {
 
 fn escape_string(string: &str) -> String {
     string
-        .replace("\\", "\\\\")
-        .replace("\"", "\\\"")
-        .replace("'", "\\'")
-        .replace("\0", "\\0")
-        .replace("\x08", "\\b")
-        .replace("\x09", "\\t")
-        .replace("\x1a", "\\z")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\'', "\\'")
+        .replace('\0', "\\0")
+        .replace('\x08', "\\b")
+        .replace('\x09', "\\t")
+        .replace('\x1a', "\\z")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
 }
 
 fn write_escaped_string_quoted(string: &str, w: &mut dyn Write) -> fmt::Result {

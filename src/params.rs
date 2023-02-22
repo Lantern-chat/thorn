@@ -34,6 +34,7 @@ macro_rules! params {
         $($rest:tt)*
     }) => {
         impl $(<$($q),*>)? $name $(<$($q),*>)? $(where $($w),*)? {
+            #[inline]
             $field_vis fn $field_name() -> $crate::Var {
                 $crate::Var::at($field_column, $offset)
             }

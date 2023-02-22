@@ -110,7 +110,7 @@ impl Collectable for Call {
         } else {
             write!(w, "{}(", match self.name {
                 CallName::Builtin(b) => b.name(),
-                CallName::Custom(ref name) => &*name,
+                CallName::Custom(ref name) => name,
             })?;
         }
 
@@ -283,7 +283,7 @@ impl Builtin {
     where
         T: Arguments,
     {
-        Builtin::coalesce((Builtin::array_agg(args), Literal::EMPTY_ARRAY.clone()))
+        Builtin::coalesce((Builtin::array_agg(args), Literal::EMPTY_ARRAY))
     }
 }
 
@@ -355,7 +355,7 @@ impl_arg_for_exprs! {
     OrderExpr<E>,
     ExistsExpr,
     UnaryExpr<V>,
-    Subscript<E, I>,
+    Access<E, I>,
     CastExpr<T>,
     LikeExpr<E>,
     Field<E, I>,

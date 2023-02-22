@@ -60,7 +60,7 @@ pub mod window;
 pub(crate) mod util;
 
 pub use self::{
-    access::AccessExt,
+    access::{Access, AccessExt},
     as_::{RenamedExpr, RenamedExt},
     between::{BetweenExpr, BetweenExt},
     binary::{BinaryExpr, BinaryExt},
@@ -135,23 +135,6 @@ where
 {
     fn collect(&self, w: &mut dyn Write, _: &mut Collector) -> fmt::Result {
         write!(w, r#""{}"."{}""#, C::NAME.name(), self.0.name())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Subscript<E, I> {
-    inner: E,
-    index: I,
-}
-
-impl<E: ValueExpr, I: ValueExpr> ValueExpr for Subscript<E, I> {}
-impl<E: ValueExpr, I: ValueExpr> Expr for Subscript<E, I> {}
-impl<E: ValueExpr, I: ValueExpr> Collectable for Subscript<E, I> {
-    fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
-        self.inner._collect(w, t)?;
-        w.write_str("[")?;
-        self.index.collect(w, t)?; // already enclosed by delimiters, so wrapping is unnecessary
-        w.write_str("]")
     }
 }
 

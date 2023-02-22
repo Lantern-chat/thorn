@@ -412,7 +412,7 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
     let mut out = String::new();
 
-    out += "use thorn::{table::Nullable, pg::Type, enums::EnumType};\n\n";
+    out += "use thorn::{enums::EnumType, pg::Type, table::Nullable};\n\n";
 
     out += &out_funcs;
     out += &out_enums;
