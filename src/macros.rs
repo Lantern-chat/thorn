@@ -91,13 +91,14 @@ pub mod __private {
 ///
 /// * For function calls `.func()` is converted to `func()`
 /// * `--` is converted to `$$`
-/// * All string literals `"string literal"` is properly escaped and formatted as `'string literal'`
+/// * `::{let ty = Type::INT8_ARRAY; ty}` can be used for dynamic cast types
+/// * All string literals (`"string literal"`) are properly escaped and formatted as `'string literal'`
 /// * Known PostgreSQL Keywords are allowed through, `sql!(SELECT * FROM TestTable)`
 /// * Non-keyword identifiers are treated as [`Table`](crate::Table) types.
 /// * `Ident::Ident` is treated as a column, so `TestTable::Col` converts to `"test_table"."col"`
 ///     * Use `@Ident::Ident` to remove the table prefix, useful for `some_value AS @TestTable::Col` aliases, which cannot take the table name
-/// * Arbitrary `Display` expressions are allowed with code-blocks `{let x = 10; x + 21}`
-///     * NOTE: Strings returned this way are NOT escaped, wrap in [`Literal`](crate::Literal)/[`.lit()`](crate::AsLit::lit) to avoid.
+/// * Arbitrary expressions are allowed with code-blocks `{let x = 10; x + 21}`, but will be converted to [`Literal`](crate::Literal) values.
+///     * To escape this behavior, prefix the code block with `@`, so `@{"something weird"}` is added directly as `something weird`, not a string.
 #[macro_export]
 macro_rules! sql {
     ($out:expr; $($tt:tt)*) => {{
@@ -141,13 +142,13 @@ mod tests {
         // random hodgepodge of symbols to test the macro
         let res = sql! {
             WITH AnonTable AS (
-                SELECT TestTable::SomeCol AS @AnonTable::Other FROM TestTable
+                SELECT TestTable::SomeCol::{let ty = Type::BIT_ARRAY; ty} AS @AnonTable::Other FROM TestTable
             )
             --
             ARRAY_AGG()
             -- ()
             SELECT SIMILAR TO TestTable::SomeCol
-            FROM[#{23}, 30]::_int8 .call_func({y}) "hel\"lo"::text[]  { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{1}
+            FROM[#{23}, 30]::_int8 ; .call_func({y}) "hel\"lo"::text[] @{"'"}  { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{1}
         }
         .unwrap();
 

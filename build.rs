@@ -93,8 +93,20 @@ macro_rules! __isql {
     file.write_all(
         br##"
         // arbitrary runtime expressions
+        ($out:expr; @$value:block $($tt:tt)*) => {
+            std::write!($out, "{}", $value)?;
+            __isql!($out; $($tt)*);
+        };
+
+        // arbitrary runtime type casting
+        ($out:expr; ::$value:block $($tt:tt)*) => {
+            std::write!($out, "::{}", $crate::pg::Type::from($value))?;
+            __isql!($out; $($tt)*);
+        };
+
+        // arbitrary runtime literals
         ($out:expr; $value:block $($tt:tt)*) => {
-            std::write!($out, "{}", { $value })?;
+            std::write!($out, "{}", $crate::AsLit::lit($value))?;
             __isql!($out; $($tt)*);
         };
 
