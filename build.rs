@@ -49,8 +49,12 @@ macro_rules! __isql {
         };
 
         // parameters
-        ($out:expr; #{$param:expr} $($tt:tt)*) => {
-            std::write!($out, "${}", $param)?;
+        ($out:expr; #{$param:expr $(=> $ty:expr)?} $($tt:tt)*) => {
+            {
+                let param = $param;
+                $out.param(param, ($($ty.into(),)? $crate::pg::Type::ANY, ).0)?;
+                std::write!($out, "${param}")?;
+            }
             __isql!($out; $($tt)*);
         };
 

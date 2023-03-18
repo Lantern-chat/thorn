@@ -1,19 +1,41 @@
+#[derive(Debug, thiserror::Error)]
+pub enum SqlFormatError {
+    #[error(transparent)]
+    FmtError(#[from] std::fmt::Error),
+
+    #[error("Invalid parameter index {0}")]
+    InvalidParameterIndex(usize),
+
+    #[error("Confliction parameter type at index {0}: {1} != {2}")]
+    ConflictingParameterType(usize, pg::Type, pg::Type),
+}
+
 #[doc(hidden)]
 pub mod __private {
     #![allow(unused)]
 
-    use std::fmt::{self, Write};
+    use super::SqlFormatError;
+
+    use std::{
+        collections::btree_map::{BTreeMap, Entry},
+        fmt::{self, Write},
+    };
 
     use crate::literal::write_escaped_string_quoted;
 
     pub struct Writer<W> {
         inner: W,
         first: bool,
+        pub params: BTreeMap<usize, pg::Type>,
     }
 
     impl<W: Write> Writer<W> {
         pub fn new(inner: W) -> Self {
-            Writer { inner, first: true }
+            Writer {
+                inner,
+                first: true,
+                params: BTreeMap::default(),
+            }
         }
 
         pub fn write_first(&mut self) -> fmt::Result {
@@ -23,6 +45,28 @@ pub mod __private {
             } else {
                 self.inner.write_str(" ")
             }
+        }
+
+        pub fn param(&mut self, idx: usize, t: pg::Type) -> Result<(), SqlFormatError> {
+            if idx < 1 {
+                return Err(SqlFormatError::InvalidParameterIndex(idx));
+            }
+
+            match self.params.entry(idx) {
+                Entry::Occupied(mut t2) if t != *t2.get() => {
+                    if *t2.get() == pg::Type::ANY {
+                        t2.insert(t);
+                    } else if t != pg::Type::ANY {
+                        return Err(SqlFormatError::ConflictingParameterType(idx, t, t2.get().clone()));
+                    }
+                }
+                Entry::Vacant(v) => {
+                    v.insert(t);
+                }
+                _ => {}
+            }
+
+            Ok(())
         }
 
         pub fn write_literal<L: Literal>(&mut self, lit: L) -> fmt::Result {
@@ -91,7 +135,7 @@ pub mod __private {
 ///
 /// * For function calls `.func()` is converted to `func()`
 /// * `--` is converted to `$$`
-/// * `::{let ty = Type::INT8_ARRAY; ty}` can be used for dynamic cast types
+/// * `::{let ty = Type::INT8_ARRAY; ty}` with any arbitrary code block can be used for dynamic cast types
 /// * All string literals (`"string literal"`) are properly escaped and formatted as `'string literal'`
 /// * Known PostgreSQL Keywords are allowed through, `sql!(SELECT * FROM TestTable)`
 /// * Non-keyword identifiers are treated as [`Table`](crate::Table) types.
@@ -99,15 +143,16 @@ pub mod __private {
 ///     * Use `@Ident::Ident` to remove the table prefix, useful for `some_value AS @TestTable::Col` aliases, which cannot take the table name
 /// * Arbitrary expressions are allowed with code-blocks `{let x = 10; x + 21}`, but will be converted to [`Literal`](crate::Literal) values.
 ///     * To escape this behavior, prefix the code block with `@`, so `@{"something weird"}` is added directly as `something weird`, not a string.
+/// * Parametric values can be specified with `#{1}` or `#{2 => Type::INT8}` for accumulating types
 #[macro_export]
 macro_rules! sql {
     ($out:expr; $($tt:tt)*) => {{
         use std::fmt::Write;
         #[allow(clippy::redundant_closure_call)]
-        (|| -> std::fmt::Result {
-            let mut writer = &mut $crate::macros::__private::Writer::new($out);
+        (|| -> Result<_, $crate::macros::SqlFormatError> {
+            let mut writer = $crate::macros::__private::Writer::new($out);
             __isql!(&mut writer; $($tt)*);
-            Ok(())
+            Ok(writer.params)
         })()
     }};
 
@@ -148,7 +193,7 @@ mod tests {
             ARRAY_AGG()
             -- ()
             SELECT SIMILAR TO TestTable::SomeCol
-            FROM[#{23}, 30]::_int8 ; .call_func({y}) "hel\"lo"::text[] @{"'"}  { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{1}
+            FROM[#{{let x = 23; x}}, 30]::_int8 #{23 => Type::TEXT} ; .call_func({y}) "hel\"lo"::text[] @{"'"}  { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{1}
         }
         .unwrap();
 
