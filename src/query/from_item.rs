@@ -23,17 +23,22 @@ impl<T> TableRef<T> {
     }
 }
 
+#[doc(hidden)]
+pub fn __write_table<T: Table>(mut w: impl Write) -> fmt::Result {
+    use crate::name::Schema;
+
+    match (T::ALIAS, T::SCHEMA) {
+        (None, Schema::None) => write!(w, "\"{}\"", T::NAME.name()),
+        (None, Schema::Named(name)) => write!(w, "\"{}\".\"{}\"", name, T::NAME.name()),
+        (Some(alias), Schema::None) => write!(w, "\"{}\" AS {alias}", T::NAME.name()),
+        (Some(alias), Schema::Named(name)) => write!(w, "\"{}\".\"{}\" AS {alias}", name, T::NAME.name()),
+    }
+}
+
 impl<T: Table> FromItem for TableRef<T> {}
 impl<T: Table> Collectable for TableRef<T> {
     fn collect(&self, w: &mut dyn Write, _: &mut Collector) -> fmt::Result {
-        use crate::name::Schema;
-
-        match (T::ALIAS, T::SCHEMA) {
-            (None, Schema::None) => write!(w, "\"{}\"", T::NAME.name()),
-            (None, Schema::Named(name)) => write!(w, "\"{}\".\"{}\"", name, T::NAME.name()),
-            (Some(alias), Schema::None) => write!(w, "\"{}\" AS {alias}", T::NAME.name()),
-            (Some(alias), Schema::Named(name)) => write!(w, "\"{}\".\"{}\" AS {alias}", name, T::NAME.name()),
-        }
+        __write_table::<T>(w)
     }
 }
 

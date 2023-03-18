@@ -8,6 +8,9 @@ pub extern crate paste;
 #[doc(hidden)]
 pub extern crate generic_array as ga;
 
+#[macro_use]
+mod macros;
+
 pub mod collect;
 pub mod expr;
 pub mod name;
@@ -72,8 +75,8 @@ mod test {
     params! {
         #[derive(Debug, Clone)]
         pub struct Test<'a> {
-            pub user_id: &'a i32 = Users::Id,
-            pub author: String = Messages::Author,
+            pub user_id: &'a i64 = Users::Id,
+            pub content: String = Messages::Content,
         }
     }
 
@@ -81,6 +84,7 @@ mod test {
         pub enum TestColumns {
             Messages::Id,
             Messages::Author,
+            Messages::Content
         }
 
         pub enum TestColumns2 continue TestColumns {
@@ -88,6 +92,8 @@ mod test {
             Users::UserName,
         }
     }
+
+    decl_alias!(pub TestAlias = Users);
 
     #[test]
     fn test_update() {
@@ -121,7 +127,13 @@ mod test {
         let s = Query::delete()
             .from::<Users>()
             .only()
-            .and_where(Users::UserName.equals(Var::of(Users::UserName)))
+            .and_where(
+                Users::UserName
+                    .array_index(1.lit())
+                    .array_index(2.lit())
+                    .json_extract("test".lit())
+                    .equals(Var::of(Users::UserName)),
+            )
             .returning(Users::Id.rename_as("user_id").expect("Invalid name"))
             .to_string();
 
@@ -133,13 +145,14 @@ mod test {
         let s = || {
             Query::insert()
                 .into::<Users>()
-                .cols(Users::COLUMNS)
                 .values(vec![Var::of(Users::Id), Var::of(Users::UserName)])
                 // or .cols(&[Users::Id, Users::UserName])
                 .returning(Users::Id)
                 .on_conflict(
                     [Users::Id],
-                    DoUpdate.set(Users::UserName, Literal::TextStr("test")),
+                    DoUpdate
+                        .set(Users::UserName, Literal::TextStr("test"))
+                        .and_where(Literal::TRUE.is_not_null()),
                 )
         };
 
@@ -215,7 +228,7 @@ mod test {
                 Var::of(Type::INT4)
                     .neg()
                     .abs()
-                    .bit_and(Literal::Int4(63))
+                    .bitand(Literal::Int4(63))
                     .cast(Type::BOOL)
                     .is_not_unknown()
                     .rename_as("Test")

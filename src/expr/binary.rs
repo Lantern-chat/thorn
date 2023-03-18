@@ -43,15 +43,15 @@ pub trait BinaryExt: Expr + Sized {
         BinaryExpr { lhs: self, rhs, op: BinaryOp::Power }
     }
     #[inline]
-    fn bit_and<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
+    fn bitand<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
         BinaryExpr { lhs: self, rhs, op: BinaryOp::BitAnd }
     }
     #[inline]
-    fn bit_or<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
+    fn bitor<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
         BinaryExpr { lhs: self, rhs, op: BinaryOp::BitOr }
     }
     #[inline]
-    fn bit_xor<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
+    fn bitxor<Rhs>(self, rhs: Rhs) -> BinaryExpr<Self, Rhs> {
         BinaryExpr { lhs: self, rhs, op: BinaryOp::BitXor }
     }
     #[inline]
@@ -107,3 +107,26 @@ impl<Lhs: ValueExpr, Rhs: ValueExpr> Collectable for BinaryExpr<Lhs, Rhs> {
         self.rhs._collect(w, t)
     }
 }
+
+macro_rules! impl_bo_binary_ops {
+    ($($op_trait:ident::$op:ident),*) => {$(
+        impl<LHS, RHS, E> std::ops::$op_trait<E> for BinaryExpr<LHS, RHS> where Self: ValueExpr {
+            type Output = BinaryExpr<Self, E>;
+
+            fn $op(self, rhs: E) -> Self::Output {
+                <Self as BinaryExt>::$op(self, rhs)
+            }
+        }
+    )*};
+}
+
+impl_bo_binary_ops!(
+    Add::add,
+    Sub::sub,
+    Mul::mul,
+    Div::div,
+    Rem::rem,
+    BitAnd::bitand,
+    BitOr::bitor,
+    BitXor::bitxor
+);

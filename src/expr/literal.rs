@@ -40,8 +40,16 @@ impl Collectable for Literal {
     }
 }
 
+use std::fmt;
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut c = Collector::default();
+        self.collect_nested(f, &mut c, 0)
+    }
+}
+
 impl Literal {
-    fn collect_nested(&self, w: &mut dyn Write, t: &mut Collector, depth: usize) -> fmt::Result {
+    fn collect_nested(&self, mut w: &mut dyn Write, t: &mut Collector, depth: usize) -> fmt::Result {
         match *self {
             Literal::Null(()) => w.write_str("NULL"),
             Literal::Bool(v) => w.write_str(match v {
@@ -69,9 +77,9 @@ impl Literal {
                     }
 
                     match *lit {
-                        Literal::TextStr(s) => write_escaped_string_nested(s, w)?,
-                        Literal::TextString(ref s) => write_escaped_string_nested(s, w)?,
-                        _ => lit.collect_nested(w, t, depth + 1)?,
+                        Literal::TextStr(s) => write_escaped_string_nested(s, &mut w)?,
+                        Literal::TextString(ref s) => write_escaped_string_nested(s, &mut w)?,
+                        _ => lit.collect_nested(&mut w, t, depth + 1)?,
                     }
                 }
 
@@ -99,7 +107,7 @@ fn escape_string(string: &str) -> String {
         .replace('\r', "\\r")
 }
 
-fn write_escaped_string_quoted(string: &str, w: &mut dyn Write) -> fmt::Result {
+pub(crate) fn write_escaped_string_quoted(string: &str, mut w: impl Write) -> fmt::Result {
     let escaped = escape_string(string);
 
     w.write_str(if escaped.find('\\').is_some() { "E'" } else { "'" })?;
@@ -107,7 +115,7 @@ fn write_escaped_string_quoted(string: &str, w: &mut dyn Write) -> fmt::Result {
     w.write_str("'")
 }
 
-fn write_escaped_string_nested(string: &str, w: &mut dyn Write) -> fmt::Result {
+fn write_escaped_string_nested(string: &str, mut w: impl Write) -> fmt::Result {
     let escaped = escape_string(string);
 
     w.write_str("\"")?;
@@ -198,3 +206,17 @@ impl_literal! {
     (A, B, C, D, E, F, G, H, I, J, K, L, M),
     (A, B, C, D, E, F, G, H, I, J, K, L, M, N)
 }
+
+macro_rules! impl_lit_binary_ops {
+    ($expr:ident => $($op_trait:ident::$op:ident),*) => {$(
+        impl<E> std::ops::$op_trait<E> for Literal {
+            type Output = $expr<Self, E>;
+
+            fn $op(self, rhs: E) -> Self::Output {
+                <Self as BinaryExt>::$op(self, rhs)
+            }
+        }
+    )*};
+}
+
+impl_lit_binary_ops!(BinaryExpr => Add::add, Sub::sub, Mul::mul, Div::div, Rem::rem, BitAnd::bitand, BitOr::bitor, BitXor::bitxor);
