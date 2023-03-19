@@ -222,12 +222,24 @@ mod tests {
 
             //if true; do { return; }
 
-            match 1; do {
+            let value = 1;
+
+            match value; do {
                 2 => {},
                 1 | 3 if true => {
                     SELECT "ONE"
                 },
                 _ => {},
+            }
+
+            for (idx, term) in [1, 2, 3].iter().enumerate(); do {
+                match idx; do {
+                    2 => {},
+                    1 | 3 if true => {
+                        SELECT "ONE"
+                    },
+                    _ => {},
+                }
             }
 
             ARRAY_AGG()

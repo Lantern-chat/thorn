@@ -28,6 +28,11 @@ macro_rules! __isql {
             return Ok(());
         };
 
+        ($out:expr; let $pat:pat_param = $expr:expr; $($tt:tt)*) => {
+            let $pat = $expr;
+            __isql!($out; $($tt)*);
+        };
+
         ($out:expr; for $pat:pat in $it:expr; do { $($bt:tt)* } $($tt:tt)* ) => {
             for $pat in $it {
                 __isql!($out; $($bt)*);
