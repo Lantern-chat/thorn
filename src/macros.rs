@@ -163,7 +163,7 @@ macro_rules! sql {
     }};
 }
 
-include!(concat!(env!("OUT_DIR"), "/keywords.rs"));
+include!(concat!(env!("OUT_DIR"), "/sql_macro.rs"));
 
 #[cfg(test)]
 mod tests {
@@ -191,9 +191,9 @@ mod tests {
             )
             --
             ARRAY_AGG()
-            -- ()
+            -- () && || |
             SELECT SIMILAR TO TestTable::SomeCol
-            FROM[#{{let x = 23; x}}, 30]::_int8 #{23 => Type::TEXT} ; .call_func({y}) "hel\"lo"::text[] @{"'"}  { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{1}
+            FROM[#{{let x = 23; x}}, 30]::_int8 #{23 => Type::TEXT} ; .call_func({y}) "hel'lo"::text[] @{"'"}  { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{1}
         }
         .unwrap();
 

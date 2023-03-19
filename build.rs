@@ -5,7 +5,7 @@ use std::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let path = Path::new(&std::env::var("OUT_DIR")?).join("keywords.rs");
+    let path = Path::new(&std::env::var("OUT_DIR")?).join("sql_macro.rs");
     let mut file = BufWriter::new(File::create(path)?);
 
     println!("cargo:rerun-if-changed=keywords.txt");
@@ -80,10 +80,6 @@ macro_rules! __isql {
             $out.write_str("]")?;
             __isql!($out; $($tt)*);
         };
-
-        // operators
-        ($out:expr; && $($tt:tt)*) => { $out.write_str("AND")?; __isql!($out; $($tt)*); };
-        ($out:expr; || $($tt:tt)*) => { $out.write_str("OR")?; __isql!($out; $($tt)*); };
     "##,
     )?;
 
@@ -122,6 +118,6 @@ macro_rules! __isql {
 }
 
 const OPERATORS: &[&str] = &[
-    "/||", "@@", "@>", "<@", "^@", "/|", "!!", "<<", ">>", "<>", "!=", ">=", "<=", ">", "<", "#", "~", "^",
-    "|", "&", "%", "/", "*", "-", "+", "=", "!", ",", ";",
+    "/||", "@@", "@>", "<@", "^@", "/|", "&&", "||", "!!", "<<", ">>", "<>", "!=", ">=", "<=", ">", "<", "#",
+    "~", "^", "|", "&", "%", "/", "*", "-", "+", "=", "!", ",", ";",
 ];
