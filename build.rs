@@ -20,6 +20,14 @@ macro_rules! __isql {
 
         ($out:expr; $lit:literal $($tt:tt)*) => { $out.write_literal($lit)?; __isql!($out; $($tt)*); };
 
+        ($out:expr; break; $($tt:tt)*) => {
+            break;
+        };
+
+        ($out:expr; return; $($tt:tt)*) => {
+            return Ok(());
+        };
+
         ($out:expr; for $pat:pat in $it:expr; do { $($bt:tt)* } $($tt:tt)* ) => {
             for $pat in $it {
                 __isql!($out; $($bt)*);
@@ -57,6 +65,18 @@ macro_rules! __isql {
             if $cond {
                 __isql!($out; $($at)*);
             }
+            __isql!($out; $($tt)*);
+        };
+
+        ($out:expr; match $cond:expr; do {$(
+            $pat:pat $(if $pat_cond:expr)? => { $($pt:tt)* } $(,)?
+        )*} $($tt:tt)*) => {
+            match $cond {$(
+                $pat $(if $pat_cond)? => {
+                    __isql!($out; $($pt)*);
+                },
+            )*}
+
             __isql!($out; $($tt)*);
         };
 

@@ -154,7 +154,7 @@ macro_rules! sql {
     (@WRITER $out:expr) => { $crate::macros::__private::Writer::new($out) };
 
     (@ADD $writer:expr; $($tt:tt)*) => {{
-        #[allow(clippy::redundant_closure_call)]
+        #[allow(clippy::redundant_closure_call, unreachable_code)]
         (|| -> Result<(), $crate::macros::SqlFormatError> {
             use std::fmt::Write;
             __isql!($writer; $($tt)*);
@@ -207,6 +207,7 @@ mod tests {
 
             for k in &k; do {
                 SELECT {k}
+                break;
             }
 
             if true; do {
@@ -219,10 +220,24 @@ mod tests {
                 SELECT {value}
             }
 
+            //if true; do { return; }
+
+            match 1; do {
+                2 => {},
+                1 | 3 if true => {
+                    SELECT "ONE"
+                },
+                _ => {},
+            }
+
             ARRAY_AGG()
             -- () && || |
             SELECT SIMILAR TO TestTable::SomeCol
             FROM[#{{let x = 23; x}}, 30]::_int8 #{23 => Type::TEXT} ; .call_func({y}) "hel'lo"::text[] @{"'"}  { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{1}
+
+            return;
+            // does not even parse after return;
+            SELECT test
         }
         .unwrap();
 
