@@ -44,7 +44,7 @@ macro_rules! __isql {
     file.write_all(
         br##"
         ($out:expr; $table:ident $($tt:tt)*) => {
-            $crate::query::from_item::__write_table::<$table>($out)?;
+            $crate::query::from_item::__write_table::<$table>(&mut $out)?;
             __isql!($out; $($tt)*);
         };
 

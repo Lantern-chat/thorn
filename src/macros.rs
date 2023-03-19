@@ -147,11 +147,12 @@ pub mod __private {
 #[macro_export]
 macro_rules! sql {
     ($out:expr; $($tt:tt)*) => {{
-        use std::fmt::Write;
         #[allow(clippy::redundant_closure_call)]
         (|| -> Result<_, $crate::macros::SqlFormatError> {
+            use std::fmt::Write;
+
             let mut writer = $crate::macros::__private::Writer::new($out);
-            __isql!(&mut writer; $($tt)*);
+            __isql!(writer; $($tt)*);
             Ok(writer.params)
         })()
     }};
