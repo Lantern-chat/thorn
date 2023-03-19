@@ -25,7 +25,6 @@ pub mod __private {
 
     pub struct Writer<W> {
         inner: W,
-        first: bool,
         pub params: BTreeMap<usize, pg::Type>,
     }
 
@@ -33,17 +32,7 @@ pub mod __private {
         pub fn new(inner: W) -> Self {
             Writer {
                 inner,
-                first: true,
                 params: BTreeMap::default(),
-            }
-        }
-
-        pub fn write_first(&mut self) -> fmt::Result {
-            if self.first {
-                self.first = false;
-                Ok(())
-            } else {
-                self.inner.write_str(" ")
             }
         }
 
@@ -69,33 +58,33 @@ pub mod __private {
             Ok(())
         }
 
-        pub fn write_literal<L: Literal>(&mut self, lit: L) -> fmt::Result {
-            self.write_first()?;
-            lit.write_literal(&mut self.inner)
+        #[inline(always)]
+        pub fn write_literal<L: WriteLiteral>(&mut self, lit: L) -> fmt::Result {
+            lit.write_literal(self)
         }
     }
 
     impl<W: Write> Write for Writer<W> {
         #[inline(always)]
         fn write_str(&mut self, s: &str) -> fmt::Result {
-            self.write_first()?;
-            self.inner.write_str(s)
+            self.inner.write_str(s)?;
+            self.inner.write_str(" ")
         }
 
         #[inline(always)]
         fn write_char(&mut self, c: char) -> fmt::Result {
-            self.write_first()?;
-            self.inner.write_char(c)
+            self.inner.write_char(c)?;
+            self.inner.write_str(" ")
         }
 
         #[inline(always)]
         fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
-            self.write_first()?;
-            self.inner.write_fmt(args)
+            self.inner.write_fmt(args)?;
+            self.inner.write_str(" ")
         }
     }
 
-    pub trait Literal: Sized + fmt::Display {
+    pub trait WriteLiteral: Sized + fmt::Display {
         #[inline(always)]
         fn write_literal(self, mut out: impl Write) -> fmt::Result {
             write!(out, "{}", self)
@@ -103,26 +92,38 @@ pub mod __private {
     }
 
     macro_rules! impl_lit {
-        ($($ty:ty),*) => {$( impl Literal for $ty {} )*}
+        ($($ty:ty),*) => {$( impl WriteLiteral for $ty {} )*}
     }
 
-    impl_lit!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, isize, usize, f32, f64);
+    macro_rules! impl_int_lit {
+        ($($ty:ty),*) => {$(
+            impl WriteLiteral for $ty {
+                #[inline]
+                fn write_literal(self, mut out: impl Write) -> fmt::Result {
+                    out.write_str(itoa::Buffer::new().format(self))
+                }
+            }
+        )*}
+    }
 
-    impl Literal for &str {
+    impl_int_lit!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, isize, usize);
+    impl_lit!(f32, f64);
+
+    impl WriteLiteral for &str {
         #[inline(always)]
         fn write_literal(self, out: impl Write) -> fmt::Result {
             write_escaped_string_quoted(self, out)
         }
     }
 
-    impl Literal for char {
+    impl WriteLiteral for char {
         #[inline(always)]
         fn write_literal(self, mut out: impl Write) -> fmt::Result {
             out.write_char(self)
         }
     }
 
-    impl Literal for bool {
+    impl WriteLiteral for bool {
         #[inline(always)]
         fn write_literal(self, mut out: impl Write) -> fmt::Result {
             out.write_str(if self { "TRUE" } else { "FALSE" })
@@ -190,7 +191,7 @@ mod tests {
             WITH AnonTable AS (
                 SELECT TestTable::SomeCol::{let ty = Type::BIT_ARRAY; ty} AS AnonTable::Other FROM TestTable
             )
-            --
+            ----
             ARRAY_AGG()
             -- () && || |
             SELECT SIMILAR TO TestTable::SomeCol
