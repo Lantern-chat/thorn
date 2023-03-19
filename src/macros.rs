@@ -60,7 +60,8 @@ pub mod __private {
 
         #[inline(always)]
         pub fn write_literal<L: WriteLiteral>(&mut self, lit: L) -> fmt::Result {
-            lit.write_literal(self)
+            lit.write_literal(&mut self.inner)?;
+            self.inner.write_str(" ")
         }
     }
 
@@ -145,23 +146,30 @@ pub mod __private {
 /// * Arbitrary expressions are allowed with code-blocks `{let x = 10; x + 21}`, but will be converted to [`Literal`](crate::Literal) values.
 ///     * To escape this behavior, prefix the code block with `@`, so `@{"something weird"}` is added directly as `something weird`, not a string.
 /// * Parametric values can be specified with `#{1}` or `#{2 => Type::INT8}` for accumulating types
+/// * For-loops in codegen are supported like `for your_variable in your_data; do { SELECT {your_variable} }
+/// * Conditionals are supported via `if condition { SELECT "true" }`
+///     * Also supports an `else { SELECT "false" }` branch
 #[macro_export]
 macro_rules! sql {
-    ($out:expr; $($tt:tt)*) => {{
-        #[allow(clippy::redundant_closure_call)]
-        (|| -> Result<_, $crate::macros::SqlFormatError> {
-            use std::fmt::Write;
+    (@WRITER $out:expr) => { $crate::macros::__private::Writer::new($out) };
 
-            let mut writer = $crate::macros::__private::Writer::new($out);
-            __isql!(writer; $($tt)*);
-            Ok(writer.params)
-        })()
+    (@ADD $writer:expr; $($tt:tt)*) => {{
+        #[allow(clippy::redundant_closure_call)]
+        (|| -> Result<(), $crate::macros::SqlFormatError> {
+            use std::fmt::Write;
+            __isql!($writer; $($tt)*);
+            Ok(())
+        }())
+    }};
+
+    ($out:expr; $($tt:tt)*) => {{
+        let mut __writer = sql!(@WRITER $out);
+        sql!(@ADD __writer; $($tt)*).map(|_| __writer.params)
     }};
 
     ($($tt:tt)*) => {{
         let mut __out = String::new();
-        let res = sql!(&mut __out; $($tt)*);
-        res.map(|_| __out)
+        sql!(&mut __out; $($tt)*).map(|_| __out)
     }};
 }
 
@@ -185,6 +193,7 @@ mod tests {
     #[test]
     fn test_sql_macro() {
         let y = 21;
+        let k = [String::from("test"); 1];
 
         // random hodgepodge of symbols to test the macro
         let res = sql! {
@@ -192,6 +201,24 @@ mod tests {
                 SELECT TestTable::SomeCol::{let ty = Type::BIT_ARRAY; ty} AS AnonTable::Other FROM TestTable
             )
             ----
+            for i in [1, 2, 3]; do {
+                SELECT #{i}
+            }
+
+            for k in &k; do {
+                SELECT {k}
+            }
+
+            if true; do {
+                SELECT "true"
+            } else {
+                SELECT "false"
+            }
+
+            if let Some(value) = Some(""); do {
+                SELECT {value}
+            }
+
             ARRAY_AGG()
             -- () && || |
             SELECT SIMILAR TO TestTable::SomeCol

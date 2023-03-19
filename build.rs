@@ -20,6 +20,46 @@ macro_rules! __isql {
 
         ($out:expr; $lit:literal $($tt:tt)*) => { $out.write_literal($lit)?; __isql!($out; $($tt)*); };
 
+        ($out:expr; for $pat:pat in $it:expr; do { $($bt:tt)* } $($tt:tt)* ) => {
+            for $pat in $it {
+                __isql!($out; $($bt)*);
+            }
+
+            __isql!($out; $($tt)*);
+        };
+
+        ($out:expr; if let $binding:pat = $value:expr; do { $($at:tt)* } else { $($bt:tt)* } $($tt:tt)* ) => {
+            if let $binding = $value {
+                __isql!($out; $($at)*);
+            } else {
+                __isql!($out; $($bt)*);
+            }
+            __isql!($out; $($tt)*);
+        };
+
+        ($out:expr; if let $binding:pat = $value:expr; do { $($at:tt)* } $($tt:tt)* ) => {
+            if let $binding = $value {
+                __isql!($out; $($at)*);
+            }
+            __isql!($out; $($tt)*);
+        };
+
+        ($out:expr; if $cond:expr; do { $($at:tt)* } else { $($bt:tt)* } $($tt:tt)* ) => {
+            if $cond {
+                __isql!($out; $($at)*);
+            } else {
+                __isql!($out; $($bt)*);
+            }
+            __isql!($out; $($tt)*);
+        };
+
+        ($out:expr; if $cond:expr; do { $($at:tt)* } $($tt:tt)* ) => {
+            if $cond {
+                __isql!($out; $($at)*);
+            }
+            __isql!($out; $($tt)*);
+        };
+
         ($out:expr; AS $table:ident::$column:ident $($tt:tt)*) => {
             std::write!($out, "AS \"{}\"", <$table as $crate::table::Column>::name(&$table::$column))?;
             __isql!($out; $($tt)*);
@@ -83,10 +123,10 @@ macro_rules! __isql {
     "##,
     )?;
 
-    for op in OPERATORS {
+    for token in TOKENS {
         writeln!(
             file,
-            r#"($out:expr; {op} $($tt:tt)*) => {{ $out.write_str("{op}")?; __isql!($out; $($tt)*); }};"#
+            r#"($out:expr; {token} $($tt:tt)*) => {{ $out.write_str("{token}")?; __isql!($out; $($tt)*); }};"#
         )?;
     }
 
@@ -117,7 +157,7 @@ macro_rules! __isql {
     Ok(())
 }
 
-const OPERATORS: &[&str] = &[
+const TOKENS: &[&str] = &[
     "/||", "@@", "@>", "<@", "^@", "/|", "&&", "||", "!!", "<<", ">>", "<>", "!=", ">=", "<=", ">", "<", "#",
     "~", "^", "|", "&", "%", "/", "*", "-", "+", "=", "!", ",", ";",
 ];

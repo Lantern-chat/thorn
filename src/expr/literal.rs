@@ -15,6 +15,7 @@ mod private {
     impl<T: Sealed, const N: usize> Sealed for [T; N] {}
     impl<T: Sealed> Sealed for &[T] {}
     impl<T: Sealed> Sealed for Vec<T> {}
+    impl<T: Sealed> Sealed for &T {}
 }
 
 pub trait Literal: Sized + private::Sealed {
@@ -23,6 +24,12 @@ pub trait Literal: Sized + private::Sealed {
 
     fn lit(self) -> Lit<Self> {
         Lit(self)
+    }
+}
+
+impl<T: Literal> Literal for &T {
+    fn collect_literal(&self, w: &mut dyn Write, t: &mut Collector, depth: usize) -> fmt::Result {
+        (**self).collect_literal(w, t, depth)
     }
 }
 

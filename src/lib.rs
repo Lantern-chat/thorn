@@ -9,7 +9,7 @@ pub extern crate paste;
 pub extern crate generic_array as ga;
 
 #[macro_use]
-mod macros;
+pub mod macros;
 
 pub mod collect;
 pub mod expr;
