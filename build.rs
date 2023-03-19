@@ -106,7 +106,7 @@ macro_rules! __isql {
 
         // arbitrary runtime literals
         ($out:expr; $value:block $($tt:tt)*) => {
-            std::write!($out, "{}", $crate::AsLit::lit($value))?;
+            std::write!($out, "{}", $crate::Literal::lit($value))?;
             __isql!($out; $($tt)*);
         };
 

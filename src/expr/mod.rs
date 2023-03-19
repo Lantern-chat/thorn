@@ -71,7 +71,7 @@ pub use self::{
     func::{Arguments, Builtin, Call},
     in_::InExt,
     is_::{IsExpr, IsExt},
-    literal::{AsLit, Literal},
+    literal::{Lit, Literal},
     order::{OrderExpr, OrderExt},
     subquery::{ExistsExpr, ExistsExt, Subquery, SubqueryExt},
     unary::{UnaryExpr, UnaryExt},
@@ -179,22 +179,22 @@ pub struct LikeExpr<E> {
     inner: E,
     not: bool,
     similar: bool,
-    pattern: Literal,
+    pattern: Lit<&'static str>,
 }
 
 #[rustfmt::skip]
 pub trait LikeExt: Expr + Sized {
     fn like(self, pattern: &'static str) -> LikeExpr<Self> {
-        LikeExpr { inner: self, not: false, similar: false, pattern: Literal::TextStr(pattern) }
+        LikeExpr { inner: self, not: false, similar: false, pattern: Lit(pattern) }
     }
     fn not_like(self, pattern: &'static str) -> LikeExpr<Self> {
-        LikeExpr { inner: self, not: true, similar: false, pattern: Literal::TextStr(pattern) }
+        LikeExpr { inner: self, not: true, similar: false, pattern: Lit(pattern) }
     }
     fn similar_to(self, pattern: &'static str) -> LikeExpr<Self> {
-        LikeExpr { inner: self, not: false, similar: true, pattern: Literal::TextStr(pattern) }
+        LikeExpr { inner: self, not: false, similar: true, pattern: Lit(pattern) }
     }
     fn not_similar_to(self, pattern: &'static str) -> LikeExpr<Self> {
-        LikeExpr { inner: self, not: true, similar: true, pattern: Literal::TextStr(pattern) }
+        LikeExpr { inner: self, not: true, similar: true, pattern: Lit(pattern) }
     }
 }
 impl<T> LikeExt for T where T: Expr {}

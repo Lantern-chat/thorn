@@ -1,7 +1,7 @@
 use super::*;
 
 pub trait BitsExt: Sized + ValueExpr {
-    fn has_any_bits<E>(self, bits: E) -> CompExpr<BinaryExpr<Self, E>, Literal>
+    fn has_any_bits<E>(self, bits: E) -> CompExpr<BinaryExpr<Self, E>, Lit<i8>>
     where
         BinaryExpr<Self, E>: Expr,
     {
@@ -16,7 +16,7 @@ pub trait BitsExt: Sized + ValueExpr {
         self.bitand(bits.clone()).equals(bits)
     }
 
-    fn has_no_bits<E>(self, bits: E) -> CompExpr<BinaryExpr<Self, E>, Literal>
+    fn has_no_bits<E>(self, bits: E) -> CompExpr<BinaryExpr<Self, E>, Lit<i8>>
     where
         BinaryExpr<Self, E>: Expr,
     {

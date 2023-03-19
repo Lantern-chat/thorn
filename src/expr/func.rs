@@ -283,7 +283,7 @@ impl Builtin {
     where
         T: Arguments,
     {
-        Builtin::coalesce((Builtin::array_agg(args), Literal::EMPTY_ARRAY))
+        Builtin::coalesce((Builtin::array_agg(args), [(); 0].lit()))
     }
 }
 
@@ -351,7 +351,6 @@ impl_arg_for_exprs! {
     CompExpr<Lhs, Rhs>,
     Call,
     IsExpr<V>,
-    Literal,
     OrderExpr<E>,
     ExistsExpr,
     UnaryExpr<V>,
@@ -363,6 +362,15 @@ impl_arg_for_exprs! {
 }
 
 impl_arg_for_literals!(i8, i16, i32, i64, bool, &'static str, f32, f64, String);
+
+impl<T: Literal> Arguments for Lit<T>
+where
+    T: 'static,
+{
+    fn to_vec(self) -> Vec<Box<dyn Expr>> {
+        vec![Box::new(self)]
+    }
+}
 
 impl<T> Arguments for Vec<T>
 where

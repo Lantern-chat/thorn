@@ -140,7 +140,7 @@ impl SelectQuery {
     }
 
     pub fn limit_n(mut self, limit: i64) -> Self {
-        self.limit = Some(Box::new(Literal::Int8(limit)));
+        self.limit = Some(Box::new(Lit(limit)));
         self
     }
 
@@ -161,7 +161,7 @@ impl SelectQuery {
     }
 
     pub fn offset_n(mut self, start: i64) -> Self {
-        self.offset = Some(Box::new(Literal::Int8(start)));
+        self.offset = Some(Box::new(Lit(start)));
         self
     }
 

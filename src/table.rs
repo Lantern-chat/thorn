@@ -321,23 +321,30 @@ pub trait RealTable: Table {
     fn verify() -> crate::query::SelectQuery {
         use crate::*;
 
-        let column_names =
-            Literal::Array(Self::COLUMNS.iter().map(|c| c.name().lit()).collect()).cast(Type::TEXT_ARRAY);
+        let column_names = Self::COLUMNS
+            .iter()
+            .map(|c| c.name())
+            .collect::<Vec<_>>()
+            .lit()
+            .cast(Type::TEXT_ARRAY);
 
-        let column_types = Literal::Array(
-            Self::COLUMNS
-                .iter()
-                .map(|c| c.ty().pg.name().to_owned().lit())
-                .collect(),
-        )
-        .cast(Type::TEXT_ARRAY);
+        let column_types = Self::COLUMNS
+            .iter()
+            .map(|c| c.ty().pg.name().to_owned())
+            .collect::<Vec<_>>()
+            .lit()
+            .cast(Type::TEXT_ARRAY);
 
-        let column_nullable = Literal::Array(Self::COLUMNS.iter().map(|c| c.ty().nullable.lit()).collect())
+        let column_nullable = Self::COLUMNS
+            .iter()
+            .map(|c| c.ty().nullable)
+            .collect::<Vec<_>>()
+            .lit()
             .cast(Type::BOOL_ARRAY);
 
-        let table_schema = match Self::SCHEMA {
-            Schema::None => Literal::NULL,
-            Schema::Named(schema) => Literal::TextStr(schema),
+        let table_schema: Box<dyn ValueExpr> = match Self::SCHEMA {
+            Schema::None => Box::new(().lit()),
+            Schema::Named(schema) => Box::new(schema.lit()),
         };
 
         let table_params = TableParameters::as_query(

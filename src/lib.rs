@@ -108,7 +108,7 @@ mod test {
         let s = Query::with()
             .with(Temp::as_query(
                 Query::select()
-                    .expr(Literal::Int4(1).alias_to(Temp::_Id))
+                    .expr(1.lit().alias_to(Temp::_Id))
                     .not_materialized(),
             ))
             .update()
@@ -151,8 +151,8 @@ mod test {
                 .on_conflict(
                     [Users::Id],
                     DoUpdate
-                        .set(Users::UserName, Literal::TextStr("test"))
-                        .and_where(Literal::TRUE.is_not_null()),
+                        .set(Users::UserName, "test".lit())
+                        .and_where(true.lit().is_not_null()),
                 )
         };
 
@@ -175,13 +175,13 @@ mod test {
                 Users::inner_join_table::<Messages>()
                     .on(Messages::Author.equals(Users::Id))
                     .left_join_table::<Users>()
-                    .on(Literal::TRUE)
+                    .on(true.lit())
                     .left_join(Lateral(Temp::as_query(
                         Query::select()
                             .expr(Users::Id.alias_to(Temp::Id))
                             .from_table::<Users>(),
                     )))
-                    .on(Literal::TRUE),
+                    .on(true.lit()),
             )
             .to_string();
 
@@ -204,9 +204,9 @@ mod test {
         let s = Query::with()
             .with(Temp::as_query(
                 Query::select()
-                    .expr(Literal::Int4(1).alias_to(Temp::_Id))
-                    .expr(Case::default().when_condition(Temp::_Id.is_not_null(), Literal::Int4(1)))
-                    .expr(If::condition(Temp::_Id.is_not_null()).then(Literal::Int4(2)))
+                    .expr(1.lit().alias_to(Temp::_Id))
+                    .expr(Case::default().when_condition(Temp::_Id.is_not_null(), 1.lit()))
+                    .expr(If::condition(Temp::_Id.is_not_null()).then(2.lit()))
                     .not_materialized(),
             ))
             .with(Temp2::as_query(
@@ -228,7 +228,7 @@ mod test {
                 Var::of(Type::INT4)
                     .neg()
                     .abs()
-                    .bitand(Literal::Int4(63))
+                    .bitand(63.lit())
                     .cast(Type::BOOL)
                     .is_not_unknown()
                     .rename_as("Test")
@@ -257,7 +257,7 @@ mod test {
             )
             .union_all(
                 Query::select()
-                    .exprs(std::iter::repeat(Literal::Int4(1)).take(8)) // must match length of other queries
+                    .exprs(std::iter::repeat(1.lit()).take(8)) // must match length of other queries
                     .from_table::<Users>(),
             )
             .group_by(Users::Id)
