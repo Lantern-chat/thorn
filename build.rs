@@ -20,8 +20,8 @@ macro_rules! __isql {
 
         ($out:expr; $lit:literal $($tt:tt)*) => { $out.write_literal($lit)?; __isql!($out; $($tt)*); };
 
-        ($out:expr; @$table:ident::$column:ident $($tt:tt)*) => {
-            std::write!($out, "\"{}\"", <$table as $crate::table::Column>::name(&$table::$column))?;
+        ($out:expr; AS $table:ident::$column:ident $($tt:tt)*) => {
+            std::write!($out, "AS \"{}\"", <$table as $crate::table::Column>::name(&$table::$column))?;
             __isql!($out; $($tt)*);
         };
 

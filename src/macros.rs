@@ -140,7 +140,7 @@ pub mod __private {
 /// * Known PostgreSQL Keywords are allowed through, `sql!(SELECT * FROM TestTable)`
 /// * Non-keyword identifiers are treated as [`Table`](crate::Table) types.
 /// * `Ident::Ident` is treated as a column, so `TestTable::Col` converts to `"test_table"."col"`
-///     * Use `@Ident::Ident` to remove the table prefix, useful for `some_value AS @TestTable::Col` aliases, which cannot take the table name
+///     * `AS Ident::Ident` is treated specially to remove all but the column name for alises.
 /// * Arbitrary expressions are allowed with code-blocks `{let x = 10; x + 21}`, but will be converted to [`Literal`](crate::Literal) values.
 ///     * To escape this behavior, prefix the code block with `@`, so `@{"something weird"}` is added directly as `something weird`, not a string.
 /// * Parametric values can be specified with `#{1}` or `#{2 => Type::INT8}` for accumulating types
@@ -188,7 +188,7 @@ mod tests {
         // random hodgepodge of symbols to test the macro
         let res = sql! {
             WITH AnonTable AS (
-                SELECT TestTable::SomeCol::{let ty = Type::BIT_ARRAY; ty} AS @AnonTable::Other FROM TestTable
+                SELECT TestTable::SomeCol::{let ty = Type::BIT_ARRAY; ty} AS AnonTable::Other FROM TestTable
             )
             --
             ARRAY_AGG()
