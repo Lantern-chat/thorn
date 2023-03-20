@@ -16,12 +16,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __isql {
-        ($out:expr; -- $($tt:tt)*) => { $out.write_str("$$")?; __isql!($out; $($tt)*); };
+        ($out:expr; -- $($tt:tt)*) => { $out.inner().write_str("$$ ")?; __isql!($out; $($tt)*); };
 
         ($out:expr; $lit:literal $($tt:tt)*) => { $out.write_literal($lit)?; __isql!($out; $($tt)*); };
 
         ($out:expr; break; $($tt:tt)*) => {
             break;
+        };
+
+        ($out:expr; continue; $($tt:tt)*) => {
+            continue;
         };
 
         ($out:expr; return; $($tt:tt)*) => {
@@ -35,6 +39,19 @@ macro_rules! __isql {
 
         ($out:expr; for $pat:pat in $it:expr; do { $($bt:tt)* } $($tt:tt)* ) => {
             for $pat in $it {
+                __isql!($out; $($bt)*);
+            }
+
+            __isql!($out; $($tt)*);
+        };
+
+        ($out:expr; for $pat:pat in $it:expr; join $($join:literal)? { $($bt:tt)* } $($tt:tt)* ) => {
+            let mut first = true;
+            for $pat in $it {
+                if !first {
+                    $out.inner().write_str(($($join,)? ",",).0)?;
+                }
+                first = false;
                 __isql!($out; $($bt)*);
             }
 
@@ -85,15 +102,24 @@ macro_rules! __isql {
             __isql!($out; $($tt)*);
         };
 
-        ($out:expr; AS $table:ident::$column:ident $($tt:tt)*) => {
-            std::write!($out, "AS \"{}\"", <$table as $crate::table::Column>::name(&$table::$column))?;
+        ($out:expr; AS $table:ident.$column:ident $($tt:tt)*) => {
+            std::write!($out.inner(), "AS \"{}\" ", <$table as $crate::table::Column>::name(&$table::$column))?;
             __isql!($out; $($tt)*);
         };
 
-        ($out:expr; $table:ident::$column:ident $($tt:tt)*) => {
-            std::write!($out, "\"{}\".\"{}\"",
+        ($out:expr; $table:ident.$column:ident $($tt:tt)*) => {
+            std::write!($out.inner(), "\"{}\".\"{}\" ",
                 <$table as $crate::Table>::NAME.name(),
                 <$table as $crate::table::Column>::name(&$table::$column))?;
+            __isql!($out; $($tt)*);
+        };
+
+        ($out:expr; $var:ident++; $($tt:tt)*) => {
+            $var += 1;
+            __isql!($out; $($tt)*);
+        };
+        ($out:expr; $var:ident--; $($tt:tt)*) => {
+            $var -= 1;
             __isql!($out; $($tt)*);
         };
 "#,
@@ -102,7 +128,7 @@ macro_rules! __isql {
     for keyword in src.split_whitespace() {
         writeln!(
             file,
-            r#"($out:expr; {keyword} $($tt:tt)*) => {{ $out.write_str("{keyword}")?; __isql!($out; $($tt)*); }};"#
+            r#"($out:expr; {keyword} $($tt:tt)*) => {{ $out.inner().write_str("{keyword} ")?; __isql!($out; $($tt)*); }};"#
         )?;
     }
 
@@ -117,7 +143,7 @@ macro_rules! __isql {
         ($out:expr; #{$param:expr $(=> $ty:expr)?} $($tt:tt)*) => {
             {
                 let param = $param;
-                $out.param(param, ($($ty.into(),)? $crate::pg::Type::ANY, ).0)?;
+                $out.param(param, ($($ty.into(),)? $crate::pg::Type::ANY,).0)?;
                 std::write!($out, "${param}")?;
             }
             __isql!($out; $($tt)*);
@@ -125,38 +151,44 @@ macro_rules! __isql {
 
         // casts
         ($out:expr; :: $param:ident $($tt:tt)*) => {
-            std::write!($out, "::{}", stringify!($param))?;
+            std::write!($out.inner(), "::{} ", stringify!($param))?;
+            __isql!($out; $($tt)*);
+        };
+
+        ($out:expr; () $($tt:tt)*) => {
+            $out.inner().write_str("() ")?;
+            __isql!($out; $($tt)*);
+        };
+
+        ($out:expr; [] $($tt:tt)*) => {
+            $out.inner().write_str("[] ")?;
             __isql!($out; $($tt)*);
         };
 
         // parenthesis and function calls
         ($out:expr; $(.$func:ident)? ( $($it:tt)* ) $($tt:tt)*) => {
-            $($out.write_str(stringify!($func))?; )?
-            $out.write_str("(")?;
+            $out.inner().write_str(concat!( $(stringify!($func),)? "( "))?;
             __isql!($out; $($it)*);
-            $out.write_str(")")?;
+            $out.inner().write_str(") ")?;
+            __isql!($out; $($tt)*);
+        };
+
+        // arbitrary runtime function calls
+        ($out:expr; .{$func:expr} ( $($it:tt)* ) $($tt:tt)*) => {
+            write!($out.inner(), "{}( ", $func)?;
+            __isql!($out; $($it)*);
+            $out.inner().write_str(") ")?;
             __isql!($out; $($tt)*);
         };
 
         // square brackets/array
         ($out:expr; [ $($it:tt)* ] $($tt:tt)*) => {
-            $out.write_str("[")?;
+            $out.inner().write_str("[ ")?;
             __isql!($out; $($it)*);
-            $out.write_str("]")?;
+            $out.inner().write_str("] ")?;
             __isql!($out; $($tt)*);
         };
-    "##,
-    )?;
 
-    for token in TOKENS {
-        writeln!(
-            file,
-            r#"($out:expr; {token} $($tt:tt)*) => {{ $out.write_str("{token}")?; __isql!($out; $($tt)*); }};"#
-        )?;
-    }
-
-    file.write_all(
-        br##"
         // arbitrary runtime expressions
         ($out:expr; @$value:block $($tt:tt)*) => {
             std::write!($out, "{}", $value)?;
@@ -169,9 +201,25 @@ macro_rules! __isql {
             __isql!($out; $($tt)*);
         };
 
+        ($out:expr; !$block:block $($tt:tt)*) => {
+            $block;
+            __isql!($out; $($tt)*);
+        };
+    "##,
+    )?;
+
+    for token in TOKENS {
+        writeln!(
+            file,
+            r#"($out:expr; {token} $($tt:tt)*) => {{ $out.inner().write_str("{token} ")?; __isql!($out; $($tt)*); }};"#
+        )?;
+    }
+
+    file.write_all(
+        br##"
         // arbitrary runtime literals
         ($out:expr; $value:block $($tt:tt)*) => {
-            std::write!($out, "{}", $crate::Literal::lit($value))?;
+            $out.write_literal($value)?;
             __isql!($out; $($tt)*);
         };
 
@@ -183,6 +231,6 @@ macro_rules! __isql {
 }
 
 const TOKENS: &[&str] = &[
-    "/||", "@@", "@>", "<@", "^@", "/|", "&&", "||", "!!", "<<", ">>", "<>", "!=", ">=", "<=", ">", "<", "#",
+    "->>", "#>>", "/||", "@@", "@>", "<@", "^@", "/|", "&&", "||", "()", "[]", "!!", "->", "#>", "<<", ">>", "<>", "!=", ">=", "<=", ">", "<", "#",
     "~", "^", "|", "&", "%", "/", "*", "-", "+", "=", "!", ",", ";",
 ];

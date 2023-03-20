@@ -20,16 +20,18 @@ mod private {
 
 pub trait Literal: Sized + private::Sealed {
     #[doc(hidden)]
-    fn collect_literal(&self, w: &mut dyn Write, t: &mut Collector, depth: usize) -> fmt::Result;
+    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result;
 
+    #[inline(always)]
     fn lit(self) -> Lit<Self> {
         Lit(self)
     }
 }
 
 impl<T: Literal> Literal for &T {
-    fn collect_literal(&self, w: &mut dyn Write, t: &mut Collector, depth: usize) -> fmt::Result {
-        (**self).collect_literal(w, t, depth)
+    #[inline]
+    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
+        (**self).collect_literal(w, depth)
     }
 }
 
@@ -40,20 +42,22 @@ pub struct Lit<L: Literal>(pub L);
 impl<L: Literal> Expr for Lit<L> {}
 impl<L: Literal> ValueExpr for Lit<L> {}
 impl<L: Literal> Collectable for Lit<L> {
-    fn collect(&self, w: &mut dyn Write, t: &mut Collector) -> fmt::Result {
-        self.0.collect_literal(w, t, 0)
+    fn collect(&self, w: &mut dyn Write, _t: &mut Collector) -> fmt::Result {
+        self.0.collect_literal(w, 0)
     }
 }
 
 impl Literal for () {
-    fn collect_literal(&self, w: &mut dyn Write, _t: &mut Collector, _depth: usize) -> fmt::Result {
+    #[inline]
+    fn collect_literal(&self, w: &mut dyn Write,  _depth: usize) -> fmt::Result {
         w.write_str("NULL")
     }
 }
 
 impl BooleanExpr for Lit<bool> {}
 impl Literal for bool {
-    fn collect_literal(&self, w: &mut dyn Write, _t: &mut Collector, _depth: usize) -> fmt::Result {
+    #[inline]
+    fn collect_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
         w.write_str(if *self { "TRUE" } else { "FALSE" })
     }
 }
@@ -61,7 +65,7 @@ impl Literal for bool {
 macro_rules! impl_num_lits {
     (@INT $($ty:ty),*) => {$(
         impl Literal for $ty {
-            fn collect_literal(&self, w: &mut dyn Write, _t: &mut Collector, _depth: usize) -> fmt::Result {
+            fn collect_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
                 w.write_str(itoa::Buffer::new().format(*self))
             }
         }
@@ -69,7 +73,7 @@ macro_rules! impl_num_lits {
 
     (@FLOAT $($ty:ty),*) => {$(
         impl Literal for $ty {
-            fn collect_literal(&self, w: &mut dyn Write, _t: &mut Collector, _depth: usize) -> fmt::Result {
+            fn collect_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
                 write!(w, "{}", *self)
             }
         }
@@ -80,7 +84,7 @@ impl_num_lits!(@INT i8, i16, i32, i64);
 impl_num_lits!(@FLOAT f32, f64);
 
 impl Literal for &str {
-    fn collect_literal(&self, w: &mut dyn Write, _t: &mut Collector, depth: usize) -> fmt::Result {
+    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
         if depth == 0 {
             write_escaped_string_quoted(self, w)
         } else {
@@ -90,13 +94,13 @@ impl Literal for &str {
 }
 
 impl Literal for String {
-    fn collect_literal(&self, w: &mut dyn Write, t: &mut Collector, depth: usize) -> fmt::Result {
-        self.as_str().collect_literal(w, t, depth)
+    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
+        self.as_str().collect_literal(w,  depth)
     }
 }
 
 impl<T: Literal> Literal for &[T] {
-    fn collect_literal(&self, mut w: &mut dyn Write, t: &mut Collector, depth: usize) -> fmt::Result {
+    fn collect_literal(&self, mut w: &mut dyn Write, depth: usize) -> fmt::Result {
         if depth == 0 {
             w.write_str("'")?;
         }
@@ -108,7 +112,7 @@ impl<T: Literal> Literal for &[T] {
                 w.write_str(", ")?;
             }
 
-            lit.collect_literal(&mut w, t, depth + 1)?
+            lit.collect_literal(&mut w, depth + 1)?
         }
 
         w.write_str("}")?;
@@ -121,22 +125,21 @@ impl<T: Literal> Literal for &[T] {
 }
 
 impl<T: Literal> Literal for Vec<T> {
-    fn collect_literal(&self, w: &mut dyn Write, t: &mut Collector, depth: usize) -> fmt::Result {
-        self.as_slice().collect_literal(w, t, depth)
+    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
+        self.as_slice().collect_literal(w, depth)
     }
 }
 
 impl<T: Literal, const N: usize> Literal for [T; N] {
-    fn collect_literal(&self, w: &mut dyn Write, t: &mut Collector, depth: usize) -> fmt::Result {
-        self.as_slice().collect_literal(w, t, depth)
+    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
+        self.as_slice().collect_literal(w, depth)
     }
 }
 
 use std::fmt;
 impl<T: Literal> fmt::Display for Lit<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut c = Collector::default();
-        self.0.collect_literal(f, &mut c, 0)
+        self.0.collect_literal(f, 0)
     }
 }
 
@@ -160,7 +163,7 @@ macro_rules! impl_literal {
             impl<$($t: private::Sealed),*> private::Sealed for ($($t,)*) {}
             impl<$($t: Literal),*> Literal for ($($t,)*) {
                 #[allow(non_snake_case)]
-                fn collect_literal(&self, mut w: &mut dyn Write, t: &mut Collector, depth: usize) -> fmt::Result {
+                fn collect_literal(&self, mut w: &mut dyn Write, depth: usize) -> fmt::Result {
                     if depth == 0 {
                         w.write_str("'")?;
                     }
@@ -177,7 +180,7 @@ macro_rules! impl_literal {
                             }
                             __thorn_inc += 1;
 
-                            $t.collect_literal(&mut w, t, depth + 1)?;
+                            $t.collect_literal(&mut w, depth + 1)?;
                         )*
                     }
 
