@@ -106,7 +106,18 @@ macro_rules! __isql {
             std::write!($out.inner(), "AS \"{}\" ", <$table as $crate::table::Column>::name(&$table::$column))?;
             __isql!($out; $($tt)*);
         };
+"#,
+    )?;
 
+    for keyword in src.split_whitespace() {
+        writeln!(
+            file,
+            r#"($out:expr; {keyword} $($tt:tt)*) => {{ $out.inner().write_str("{keyword} ")?; __isql!($out; $($tt)*); }};"#
+        )?;
+    }
+
+    file.write_all(
+        br##"
         ($out:expr; $table:ident.$column:ident $($tt:tt)*) => {
             std::write!($out.inner(), "\"{}\".\"{}\" ",
                 <$table as $crate::Table>::NAME.name(),
@@ -122,18 +133,7 @@ macro_rules! __isql {
             $var -= 1;
             __isql!($out; $($tt)*);
         };
-"#,
-    )?;
 
-    for keyword in src.split_whitespace() {
-        writeln!(
-            file,
-            r#"($out:expr; {keyword} $($tt:tt)*) => {{ $out.inner().write_str("{keyword} ")?; __isql!($out; $($tt)*); }};"#
-        )?;
-    }
-
-    file.write_all(
-        br##"
         ($out:expr; $table:ident $($tt:tt)*) => {
             $crate::query::from_item::__write_table::<$table>(&mut $out)?;
             __isql!($out; $($tt)*);
@@ -231,6 +231,6 @@ macro_rules! __isql {
 }
 
 const TOKENS: &[&str] = &[
-    "->>", "#>>", "/||", "@@", "@>", "<@", "^@", "/|", "&&", "||", "()", "[]", "!!", "->", "#>", "<<", ">>", "<>", "!=", ">=", "<=", ">", "<", "#",
-    "~", "^", "|", "&", "%", "/", "*", "-", "+", "=", "!", ",", ";",
+    "->>", "#>>", "/||", "@@", "@>", "<@", "^@", "/|", "&&", "||", "()", "[]", "!!", "->", "#>", "<<", ">>",
+    "<>", "!=", ">=", "<=", ">", "<", "#", "~", "^", "|", "&", "%", "/", "*", "-", "+", "=", "!", ",", ";",
 ];

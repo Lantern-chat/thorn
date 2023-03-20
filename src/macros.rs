@@ -124,13 +124,13 @@ macro_rules! sql {
     }};
 
     ($out:expr; $($tt:tt)*) => {{
-        let mut __writer = sql!(@WRITER $out);
-        sql!(@ADD __writer; $($tt)*).map(|_| __writer.params)
+        let mut __thorn_writer = sql!(@WRITER $out);
+        sql!(@ADD __thorn_writer; $($tt)*).map(|_| __thorn_writer.params)
     }};
 
     ($($tt:tt)*) => {{
-        let mut __out = String::new();
-        sql!(&mut __out; $($tt)*).map(|_| __out)
+        let mut __thorn_out = String::new();
+        sql!(&mut __thorn_out; $($tt)*).map(|_| __thorn_out)
     }};
 }
 
@@ -186,6 +186,8 @@ mod tests {
             //if true; do { return; }
 
             let value = 1;
+
+            AND  .call()
 
             match value; do {
                 2 => {},
