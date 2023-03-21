@@ -107,7 +107,7 @@ pub mod __private {
 /// * Arbitrary expressions are allowed with code-blocks `{let x = 10; x + 21}`, but will be converted to [`Literal`](crate::Literal) values.
 ///     * To escape this behavior, prefix the code block with `@`, so `@{"something weird"}` is added directly as `something weird`, not a string.
 /// * Parametric values can be specified with `#{1}` or `#{2 => Type::INT8}` for accumulating types
-/// * For-loops in codegen are supported like `for your_variable in your_data; do { SELECT {your_variable} }
+/// * For-loops in codegen are supported like `for your_variable in your_data { SELECT {your_variable} }
 /// * Conditionals are supported via `if condition { SELECT "true" }`
 ///     * Also supports an `else { SELECT "false" }` branch
 #[macro_export]
@@ -136,7 +136,7 @@ macro_rules! sql {
 
 include!(concat!(env!("OUT_DIR"), "/sql_macro.rs"));
 
-// #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use crate::pg::Type;
     use crate::table::*;
@@ -151,7 +151,7 @@ mod tests {
         }
     }
 
-    // #[test]
+    #[test]
     fn test_sql_macro() {
         let y = 21;
         let k = [String::from("test"); 1];
@@ -162,34 +162,39 @@ mod tests {
                 SELECT TestTable.SomeCol::{let ty = Type::BIT_ARRAY; ty} AS AnonTable.Other FROM TestTable
             )
             ----
-            for i in [1, 2, 3]; do {
+            for-join{"%"} i in [1, 2, 3] {
                 SELECT #{i}
-            }
-
-            for k in &k; do {
-                SELECT {k}
-                break;
             }
 
             .{"test"}(1)
 
-            if true; do {
-                SELECT "true"
-            } else {
-                SELECT "false"
+            for v in k {
+                SELECT {v}
             }
 
-            if let Some(value) = Some(""); do {
+            .{"test"}(1)
+
+            if true {
+                SELECT {"true"}
+            } else {
+                if true {
+                    SELECT "false"
+                } else {
+                    TRUE
+                }
+            }
+
+            if let Some(value) = Some("") {
                 SELECT {value}
             }
 
-            //if true; do { return; }
+            if true { return; }
 
             let value = 1;
 
             AND  .call()
 
-            match value; do {
+            match value {
                 2 => {},
                 1 | 3 if true => {
                     SELECT "ONE"
@@ -197,11 +202,13 @@ mod tests {
                 _ => {},
             }
 
-            for (idx, term) in [1, 2, 3].iter().enumerate(); do {
-                match idx; do {
+            for (idx, term) in [1, 2, 3].iter().enumerate() {
+                match idx {
                     2 => {},
                     1 | 3 if true => {
+                        if false {
                         SELECT "ONE"
+                        }
                     },
                     _ => {},
                 }

@@ -37,69 +37,169 @@ macro_rules! __isql {
             __isql!($out; $($tt)*);
         };
 
-        ($out:expr; for $pat:pat in $it:expr; do { $($bt:tt)* } $($tt:tt)* ) => {
-            for $pat in $it {
-                __isql!($out; $($bt)*);
+        ($out:expr; const $name:ident: $ty:ty = $expr:expr; $($tt:tt)*) => {
+            const $name: $ty = $expr;
+            __isql!($out; $($tt)*);
+        };
+
+        ($out:expr; for-join $({$join:literal})? $pat:pat in $($rest:tt)*) => {
+            __isql!(@JOIN $out;
+                pat = ($pat)
+                join = ($($join)?)
+                iter = ()
+                rest = ($($rest)*)
+            );
+        };
+
+        ($out:expr; for $pat:pat in $($rest:tt)*) => {
+            __isql!(@FOR $out;
+                pat = ($pat)
+                iter = ()
+                rest = ($($rest)*)
+            );
+        };
+
+        ($out:expr; if $($rest:tt)*) => {
+            __isql!(@BRANCH $out;
+                pred = ()
+                rest = ($($rest)*)
+            );
+        };
+
+        ($out:expr; match $($rest:tt)*) => {
+            __isql!(@MATCH $out;
+                pred = ()
+                rest = ($($rest)*)
+            );
+        };
+
+        (@FOR $out:expr;
+            pat = ($pat:pat)
+            iter = ($($iter:tt)*)
+            rest = ({ $($rest:tt)* } $($tt:tt)*)
+        ) => {
+            for $pat in $($iter)* {
+                __isql!($out; $($rest)*);
             }
 
             __isql!($out; $($tt)*);
         };
 
-        ($out:expr; for $pat:pat in $it:expr; join $($join:literal)? { $($bt:tt)* } $($tt:tt)* ) => {
+        (@FOR $out:expr;
+            pat = ($pat:pat)
+            iter = ($($iter:tt)*)
+            rest = ($next:tt $($rest:tt)*)
+        ) => {
+            __isql!(@FOR $out;
+                pat = ($pat)
+                iter = ($($iter)* $next)
+                rest = ($($rest)*)
+            );
+        };
+
+        (@JOIN $out:expr;
+            pat = ($pat:pat)
+            join = ($($join:literal)?)
+            iter = ($($iter:tt)*)
+            rest = ({ $($rest:tt)* } $($tt:tt)*)
+        ) => {
             let mut first = true;
-            for $pat in $it {
+            for $pat in $($iter)* {
                 if !first {
                     $out.inner().write_str(($($join,)? ",",).0)?;
                 }
                 first = false;
-                __isql!($out; $($bt)*);
+
+                __isql!($out; $($rest)*);
             }
 
             __isql!($out; $($tt)*);
         };
 
-        ($out:expr; if let $binding:pat = $value:expr; do { $($at:tt)* } else { $($bt:tt)* } $($tt:tt)* ) => {
-            if let $binding = $value {
-                __isql!($out; $($at)*);
+        (@JOIN $out:expr;
+            pat = ($pat:pat)
+            join = ($($join:literal)?)
+            iter = ($($iter:tt)*)
+            rest = ($next:tt $($rest:tt)*)
+        ) => {
+            __isql!(@JOIN $out;
+                pat = ($pat)
+                join = ($($join)?)
+                iter = ($($iter)* $next)
+                rest = ($($rest)*)
+            );
+        };
+
+        // (@BRANCH $out:expr;
+        //     pred = ( $($pred:tt)* )
+        //     rest = ( { $($then:tt)* } else if $($rest:tt)* )
+        // ) => {
+        //     if $($pred)* {
+        //         __isql!($out; $($then)*);
+        //     } else {
+        //         __isql!(@BRANCH $out;
+        //             pred = ()
+        //             rest = ($($rest)*)
+        //         );
+        //     }
+        //     __isql!($out; $($tt)*);
+        // };
+
+        (@BRANCH $out:expr;
+            pred = ( $($pred:tt)* )
+            rest = ( { $($then:tt)* } else { $($else:tt)* } $($tt:tt)* )
+        ) => {
+            if $($pred)* {
+                __isql!($out; $($then)*);
             } else {
-                __isql!($out; $($bt)*);
+                __isql!($out; $($else)*);
             }
             __isql!($out; $($tt)*);
         };
 
-        ($out:expr; if let $binding:pat = $value:expr; do { $($at:tt)* } $($tt:tt)* ) => {
-            if let $binding = $value {
-                __isql!($out; $($at)*);
+        (@BRANCH $out:expr;
+            pred = ( $($pred:tt)* )
+            rest = ( { $($then:tt)* } $($tt:tt)* )
+        ) => {
+            if $($pred)* {
+                __isql!($out; $($then)*);
             }
             __isql!($out; $($tt)*);
         };
 
-        ($out:expr; if $cond:expr; do { $($at:tt)* } else { $($bt:tt)* } $($tt:tt)* ) => {
-            if $cond {
-                __isql!($out; $($at)*);
-            } else {
-                __isql!($out; $($bt)*);
-            }
-            __isql!($out; $($tt)*);
+        (@BRANCH $out:expr;
+            pred = ($($pred:tt)*)
+            rest = ($next:tt $($rest:tt)*)
+        ) => {
+            __isql!(@BRANCH $out;
+                pred = ($($pred)* $next)
+                rest = ($($rest)*)
+            );
         };
 
-        ($out:expr; if $cond:expr; do { $($at:tt)* } $($tt:tt)* ) => {
-            if $cond {
-                __isql!($out; $($at)*);
-            }
-            __isql!($out; $($tt)*);
-        };
-
-        ($out:expr; match $cond:expr; do {$(
-            $pat:pat $(if $pat_cond:expr)? => { $($pt:tt)* } $(,)?
-        )*} $($tt:tt)*) => {
-            match $cond {$(
+        (@MATCH $out:expr;
+            pred = ($($pred:tt)*)
+            rest = ( {
+                $($pat:pat $(if $pat_cond:expr)? => { $($pt:tt)* } $(,)?)*
+            } $($tt:tt)* )
+        ) => {
+            match $($pred)* {$(
                 $pat $(if $pat_cond)? => {
                     __isql!($out; $($pt)*);
                 },
             )*}
 
             __isql!($out; $($tt)*);
+        };
+
+        (@MATCH $out:expr;
+            pred = ($($pred:tt)*)
+            rest = ($next:tt $($rest:tt)*)
+        ) => {
+            __isql!(@MATCH $out;
+                pred = ($($pred)* $next)
+                rest = ($($rest)*)
+            );
         };
 
         ($out:expr; AS $table:ident.$column:ident $($tt:tt)*) => {
