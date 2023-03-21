@@ -219,9 +219,7 @@ macro_rules! __isql {
     file.write_all(
         br##"
         ($out:expr; $table:ident.$column:ident $($tt:tt)*) => {
-            std::write!($out.inner(), "\"{}\".\"{}\" ",
-                <$table as $crate::Table>::NAME.name(),
-                <$table as $crate::table::Column>::name(&$table::$column))?;
+            $out.write_column($table::$column)?;
             __isql!($out; $($tt)*);
         };
 
@@ -235,7 +233,7 @@ macro_rules! __isql {
         };
 
         ($out:expr; $table:ident $($tt:tt)*) => {
-            $crate::query::from_item::__write_table::<$table>(&mut $out)?;
+            $out.write_table::<$table>()?;
             __isql!($out; $($tt)*);
         };
 

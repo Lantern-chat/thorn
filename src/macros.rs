@@ -15,7 +15,10 @@ pub mod __private {
     #![allow(unused)]
 
     use super::SqlFormatError;
-    use crate::Literal;
+    use crate::{
+        table::{Column, Table},
+        Literal,
+    };
 
     use std::{
         collections::btree_map::{BTreeMap, Entry},
@@ -67,6 +70,19 @@ pub mod __private {
         pub fn write_literal<L: Literal>(&mut self, lit: L) -> fmt::Result {
             lit.collect_literal(self.inner(), 0)?;
             self.inner.write_str(" ")
+        }
+
+        pub fn write_column<T: Table>(&mut self, col: T) -> fmt::Result {
+            write!(
+                self.inner(),
+                "\"{}\".\"{}\" ",
+                <T as Table>::NAME.name(),
+                <T as Column>::name(&col)
+            )
+        }
+
+        pub fn write_table<T: Table>(&mut self) -> fmt::Result {
+            crate::query::from_item::__write_table::<T>(self)
         }
     }
 
