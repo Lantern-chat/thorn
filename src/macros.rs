@@ -84,6 +84,10 @@ pub mod __private {
         pub fn write_table<T: Table>(&mut self) -> fmt::Result {
             crate::query::from_item::__write_table::<T>(self)
         }
+
+        pub fn write_column_name<C: Column>(&mut self, col: C) -> fmt::Result {
+            write!(self.inner(), "\"{}\" ", col.name())
+        }
     }
 
     impl<W: Write> Write for Writer<W> {
