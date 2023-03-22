@@ -134,7 +134,7 @@ macro_rules! sql {
         #[allow(clippy::redundant_closure_call, unreachable_code)]
         (|| -> Result<(), $crate::macros::SqlFormatError> {
             use std::fmt::Write;
-            __isql!($writer; $($tt)*);
+            __isql!([] $writer; $($tt)*);
             Ok(())
         }())
     }};
