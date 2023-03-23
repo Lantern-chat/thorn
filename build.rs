@@ -264,9 +264,7 @@ macro_rules! __isql {
         // parameters
         ([$($stack:expr)*] $out:expr; #{$param:expr $(=> $ty:expr)?} $($tt:tt)*) => {
             __isql!(@FLUSH $out; [$($stack)*]);
-            let __thorn_param = $param;
-            $out.param(__thorn_param, ($($ty.into(),)? $crate::pg::Type::ANY,).0)?;
-            std::write!($out, "${__thorn_param}")?;
+            $out.param($param, ($($ty.into(),)? $crate::pg::Type::ANY,).0)?;
             __isql!([] $out; $($tt)*);
         };
 

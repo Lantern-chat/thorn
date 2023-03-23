@@ -63,7 +63,7 @@ pub mod __private {
                 _ => {}
             }
 
-            Ok(())
+            self.write_literal(idx as i64).map_err(From::from)
         }
 
         #[inline(always)]
@@ -149,7 +149,7 @@ macro_rules! sql {
     }};
 
     ($($tt:tt)*) => {{
-        let mut __thorn_out = String::new();
+        let mut __thorn_out = String::with_capacity(128);
         sql!(&mut __thorn_out; $($tt)*).map(|_| __thorn_out)
     }};
 }

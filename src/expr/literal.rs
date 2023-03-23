@@ -49,7 +49,7 @@ impl<L: Literal> Collectable for Lit<L> {
 
 impl Literal for () {
     #[inline]
-    fn collect_literal(&self, w: &mut dyn Write,  _depth: usize) -> fmt::Result {
+    fn collect_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
         w.write_str("NULL")
     }
 }
@@ -95,7 +95,7 @@ impl Literal for &str {
 
 impl Literal for String {
     fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
-        self.as_str().collect_literal(w,  depth)
+        self.as_str().collect_literal(w, depth)
     }
 }
 
