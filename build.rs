@@ -19,7 +19,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[macro_export]
 macro_rules! __isql {
         ([$($stack:expr)*] $out:expr; -- $($tt:tt)*) => { __isql!([$($stack)* "$$"] $out; $($tt)*); };
+        ([$($stack:expr)*] $out:expr; 0 $($tt:tt)*) => { __isql!([$($stack)* "0"] $out; $($tt)*); };
         ([$($stack:expr)*] $out:expr; 1 $($tt:tt)*) => { __isql!([$($stack)* "1"] $out; $($tt)*); };
+        ([$($stack:expr)*] $out:expr; 2 $($tt:tt)*) => { __isql!([$($stack)* "2"] $out; $($tt)*); };
 
         (@FLUSH $out:expr; [$($stack:expr)+]) => {
             $out.inner().write_str(concat!($($stack, " ",)*))?;
