@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
 #![allow(unused_imports, clippy::wrong_self_convention)]
 
+pub extern crate tokio_postgres as pgt;
 pub extern crate postgres_types as pg;
 
 #[doc(hidden)]

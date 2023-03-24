@@ -13,10 +13,11 @@ thiserror = "1.0.24"
 generic-array = "0.14.5"
 indexmap = "1.9.1"
 itoa = "1"
+tokio-postgres = { version = "0.7", default-features = false }
 
 heck = { optional = true, version = "0.4.0" }
-tokio-postgres = { optional = true, version = "0.7" }
 textwrap = { optional = true, version = "0.16.0" }
+smallvec = "1.10.0"
 
 [features]
-generate = ["tokio-postgres", "heck", "textwrap"]
+generate = ["heck", "textwrap", "tokio-postgres/default"]

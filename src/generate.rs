@@ -1,5 +1,3 @@
-extern crate tokio_postgres as pgt;
-
 use heck::*;
 
 use std::borrow::Cow;

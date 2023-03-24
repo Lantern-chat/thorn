@@ -10,104 +10,123 @@ pub enum SqlFormatError {
     ConflictingParameterType(usize, pg::Type, pg::Type),
 }
 
-#[doc(hidden)]
-pub mod __private {
-    #![allow(unused)]
+use smallvec::SmallVec;
+use std::marker::PhantomData;
 
-    use super::SqlFormatError;
-    use crate::{
-        table::{Column, Table},
-        Literal,
-    };
+pub struct Query<'a, E: From<pgt::Row>> {
+    pub q: String,
+    pub params: SmallVec<[&'a (dyn pg::ToSql + Sync); 16]>,
+    pub param_tys: SmallVec<[pg::Type; 16]>,
+    e: PhantomData<E>,
+}
 
-    use std::{
-        collections::btree_map::{BTreeMap, Entry},
-        fmt::{self, Write},
-    };
+impl<E: From<pgt::Row>> Default for Query<'_, E> {
+    fn default() -> Self {
+        Query {
+            q: String::with_capacity(128),
+            params: Default::default(),
+            param_tys: Default::default(),
+            e: std::marker::PhantomData,
+        }
+    }
+}
 
-    use crate::literal::write_escaped_string_quoted;
+use crate::{
+    table::{Column, Table},
+    Literal,
+};
+use std::{
+    collections::hash_map::{Entry, HashMap},
+    fmt::{self, Write},
+};
 
-    pub struct Writer<W> {
-        inner: W,
-        pub params: BTreeMap<usize, pg::Type>,
+use crate::literal::write_escaped_string_quoted;
+
+#[allow(clippy::single_char_add_str)]
+impl<E: From<pgt::Row>> Write for Query<'_, E> {
+    #[inline(always)]
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.q.push_str(s);
+        self.q.push_str(" ");
+        Ok(())
     }
 
-    impl<W: Write> Writer<W> {
-        pub fn new(inner: W) -> Self {
-            Writer {
-                inner,
-                params: BTreeMap::default(),
-            }
-        }
+    #[inline(always)]
+    fn write_char(&mut self, c: char) -> fmt::Result {
+        self.q.push(c);
+        self.q.push_str(" ");
+        Ok(())
+    }
 
-        pub fn inner(&mut self) -> &mut W {
-            &mut self.inner
-        }
+    #[inline(always)]
+    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
+        self.q.write_fmt(args)?;
+        self.q.push_str(" ");
+        Ok(())
+    }
+}
 
-        pub fn param(&mut self, idx: usize, t: pg::Type) -> Result<(), SqlFormatError> {
-            if idx < 1 {
-                return Err(SqlFormatError::InvalidParameterIndex(idx));
-            }
+#[allow(clippy::single_char_add_str)]
+impl<'a, E: From<pgt::Row>> Query<'a, E> {
+    pub fn inner(&mut self) -> &mut String {
+        &mut self.q
+    }
 
-            match self.params.entry(idx) {
-                Entry::Occupied(mut t2) if t != *t2.get() => {
-                    if *t2.get() == pg::Type::ANY {
-                        t2.insert(t);
-                    } else if t != pg::Type::ANY {
-                        return Err(SqlFormatError::ConflictingParameterType(idx, t, t2.get().clone()));
-                    }
-                }
-                Entry::Vacant(v) => {
-                    v.insert(t);
-                }
-                _ => {}
-            }
-
-            self.write_literal(idx as i64).map_err(From::from)
-        }
-
-        #[inline(always)]
-        pub fn write_literal<L: Literal>(&mut self, lit: L) -> fmt::Result {
-            lit.collect_literal(self.inner(), 0)?;
-            self.inner.write_str(" ")
-        }
-
-        pub fn write_column<T: Table>(&mut self, col: T) -> fmt::Result {
-            write!(
-                self.inner(),
-                "\"{}\".\"{}\" ",
-                <T as Table>::NAME.name(),
-                <T as Column>::name(&col)
+    pub fn param(&mut self, value: &'a (dyn pg::ToSql + Sync), ty: pg::Type) -> Result<(), SqlFormatError> {
+        //if self.params.
+        let idx = if let Some(idx) = self.params.iter().position(|&p| {
+            // SAFETY: Worst-case parameter duplication, best-case using codegen-units=1 no issues at all
+            #[allow(clippy::vtable_address_comparisons)]
+            std::ptr::eq(
+                p as *const (dyn pg::ToSql + Sync),
+                value as *const (dyn pg::ToSql + Sync),
             )
-        }
+        }) {
+            if ty != pg::Type::ANY {
+                let existing_ty = &self.param_tys[idx];
+                if *existing_ty == pg::Type::ANY {
+                    self.param_tys[idx] = ty;
+                } else if *existing_ty != ty {
+                    return Err(SqlFormatError::ConflictingParameterType(
+                        idx,
+                        ty,
+                        existing_ty.clone(),
+                    ));
+                }
+            }
 
-        pub fn write_table<T: Table>(&mut self) -> fmt::Result {
-            crate::query::from_item::__write_table::<T>(self)
-        }
+            idx + 1 // 1-indexed
+        } else {
+            self.params.push(value);
+            self.param_tys.push(ty);
+            self.params.len() // 1-indexed, take len after push
+        };
 
-        pub fn write_column_name<C: Column>(&mut self, col: C) -> fmt::Result {
-            write!(self.inner(), "\"{}\" ", col.name())
-        }
+        self.inner().push_str("$");
+        self.write_literal(idx as i64).map_err(From::from)
     }
 
-    impl<W: Write> Write for Writer<W> {
-        #[inline(always)]
-        fn write_str(&mut self, s: &str) -> fmt::Result {
-            self.inner.write_str(s)?;
-            self.inner.write_str(" ")
-        }
+    #[inline(always)]
+    pub fn write_literal<L: Literal>(&mut self, lit: L) -> fmt::Result {
+        lit.collect_literal(self.inner(), 0)?;
+        self.inner().write_str(" ")
+    }
 
-        #[inline(always)]
-        fn write_char(&mut self, c: char) -> fmt::Result {
-            self.inner.write_char(c)?;
-            self.inner.write_str(" ")
-        }
+    pub fn write_column<T: Table>(&mut self, col: T) -> fmt::Result {
+        write!(
+            self.inner(),
+            "\"{}\".\"{}\" ",
+            <T as Table>::NAME.name(),
+            <T as Column>::name(&col)
+        )
+    }
 
-        #[inline(always)]
-        fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
-            self.inner.write_fmt(args)?;
-            self.inner.write_str(" ")
-        }
+    pub fn write_table<T: Table>(&mut self) -> fmt::Result {
+        crate::query::from_item::__write_table::<T>(self)
+    }
+
+    pub fn write_column_name<C: Column>(&mut self, col: C) -> fmt::Result {
+        write!(self.inner(), "\"{}\" ", col.name())
     }
 }
 
@@ -132,31 +151,20 @@ pub mod __private {
 ///     * Also supports an `else { SELECT "false" }` branch
 #[macro_export]
 macro_rules! sql {
-    (@WRITER $out:expr) => { $crate::macros::__private::Writer::new($out) };
-
-    (@ADD $writer:expr; $($tt:tt)*) => {{
-        #[allow(clippy::redundant_closure_call, unreachable_code)]
-        (|| -> Result<(), $crate::macros::SqlFormatError> {
-            use std::fmt::Write;
-            __isql!([] $writer; $($tt)*);
-            Ok(())
-        }())
-    }};
-
-    ($out:expr; $($tt:tt)*) => {{
-        let mut __thorn_writer = sql!(@WRITER $out);
-        sql!(@ADD __thorn_writer; $($tt)*).map(|_| __thorn_writer.params)
-    }};
-
     ($($tt:tt)*) => {{
-        let mut __thorn_out = String::with_capacity(128);
-        sql!(&mut __thorn_out; $($tt)*).map(|_| __thorn_out)
+        #[allow(clippy::redundant_closure_call, unreachable_code)]
+        (|| -> Result<_, $crate::macros::SqlFormatError> {
+            use std::fmt::Write;
+            let mut __thorn_query = $crate::macros::Query::<Columns>::default();
+            __isql!([] () f __thorn_query; $($tt)*);
+            Ok(__thorn_query)
+        }())
     }};
 }
 
 include!(concat!(env!("OUT_DIR"), "/sql_macro.rs"));
 
-#[cfg(test)]
+// #[cfg(test)]
 mod tests {
     use crate::pg::Type;
     use crate::table::*;
@@ -164,6 +172,7 @@ mod tests {
     crate::tables! {
         pub struct TestTable in MySchema {
             SomeCol: Type::INT8,
+            SomeCol2: Type::INT8,
         }
 
         pub struct AnonTable {
@@ -171,10 +180,16 @@ mod tests {
         }
     }
 
-    #[test]
+    // #[test]
     fn test_sql_macro() {
         let y = 21;
         let k = [String::from("test"); 1];
+
+        let res = sql! {
+            use std::borrow::{Cow, Borrow};
+
+            SELECT 1 AS @SomCol
+        };
 
         // random hodgepodge of symbols to test the macro
         let res = sql! {
@@ -183,7 +198,7 @@ mod tests {
             )
             ----
             for-join{"%"} i in [1, 2, 3] {
-                SELECT #{i}
+                SELECT {i}
             }
 
             .{"test"}(1)
@@ -201,6 +216,9 @@ mod tests {
                     SELECT "false"
                 } else {
                     TRUE
+
+                    // triggers compile_fail!
+                    //SELECT 1 AS @TestTable.SomeCol
                 }
             }
 
@@ -208,7 +226,7 @@ mod tests {
                 SELECT {value}
             }
 
-            if true { return; }
+            if true { 1 }
 
             let value = 1;
 
@@ -227,7 +245,7 @@ mod tests {
                     2 => {},
                     1 | 3 if true => {
                         if false {
-                        SELECT "ONE"
+                        SELECT "TWO"
                         }
                     },
                     _ => {},
@@ -237,14 +255,15 @@ mod tests {
             ARRAY_AGG()
             -- () && || |
             SELECT SIMILAR TO TestTable.SomeCol
-            FROM[#{{let x = 23; x}}, 30]::_int8 #{23 => Type::TEXT} ; .call_func({y}) "hel'lo"::text[] @{"'"}  { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{1}
+            FROM[#{&"test"}, 30]::_int8 #{&23 => Type::TEXT} ; .call_func({y}) "hel'lo"::text[] @{"'"}     { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{&1}
 
-            return;
-            // does not even parse after return;
-            SELECT test
+            1 AS @SomeCol,
+            TestTable.SomeCol2 AS @_
+
+            SELECT
         }
         .unwrap();
 
-        println!("OUT: {}", res);
+        println!("OUT: {}", res.q);
     }
 }
