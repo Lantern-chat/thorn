@@ -428,6 +428,7 @@ macro_rules! __isql {
         ([$($stack:expr)*] ($first_export:ident $($exports:ident)*) f $out:expr;) => {
             __isql!([$($stack)*] () f $out;);
 
+            #[allow(clippy::enum_variant_names)]
             #[repr(usize)]
             enum ColumnIndices {
                 $first_export = 0,

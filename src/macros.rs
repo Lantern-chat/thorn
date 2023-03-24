@@ -15,7 +15,7 @@ use std::marker::PhantomData;
 
 pub struct Query<'a, E: From<pgt::Row>> {
     pub q: String,
-    pub params: SmallVec<[&'a (dyn pg::ToSql + Sync); 16]>,
+    pub params: SmallVec<[&'a (dyn pg::ToSql + Sync + 'a); 16]>,
     pub param_tys: SmallVec<[pg::Type; 16]>,
     e: PhantomData<E>,
 }
