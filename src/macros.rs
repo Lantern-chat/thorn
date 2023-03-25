@@ -160,6 +160,25 @@ macro_rules! sql {
             use std::fmt::Write;
             use $crate::*;
 
+            #[repr(transparent)]
+            pub struct Columns($crate::pgt::Row);
+
+            impl From<$crate::pgt::Row> for Columns {
+                #[inline(always)]
+                fn from(row: $crate::pgt::Row) -> Self {
+                    Columns(row)
+                }
+            }
+
+            impl std::ops::Deref for Columns {
+                type Target = $crate::pgt::Row;
+
+                #[inline(always)]
+                fn deref(&self) -> &Self::Target {
+                    &self.0
+                }
+            }
+
             let mut __thorn_query = $crate::macros::Query::<Columns>::default();
             __isql!([] () f __thorn_query; $($tt)*);
             Ok(__thorn_query)

@@ -350,6 +350,14 @@ macro_rules! __isql {
             __isql!([$($stack)* stringify!($func)] ($($exports)*) $nested $out; ( $($it)* ) $($tt)*);
         };
 
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; , (|) $($tt:tt)*) => {
+            compile_error!("Trailing commas are not supported in SQL");
+        };
+
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; , [|] $($tt:tt)*) => {
+            compile_error!("Trailing commas are not supported in SQL");
+        };
+
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; (|) $($tt:tt)*) => {
             __isql!([$($stack)* ")"] ($($exports)*) $nested $out; $($tt)* );
         };
@@ -418,7 +426,7 @@ macro_rules! __isql {
         };
 
         ([$($stack:expr)*] ($($exports:ident)+) t $out:expr;) => {
-            compile_fail!("Column exports cannot be declared within branching code");
+            compile_error!("Column exports cannot be declared within branching code");
         };
 
         ([$($stack:expr)*] () t $out:expr;) => {
@@ -427,25 +435,6 @@ macro_rules! __isql {
 
         ([$($stack:expr)*] () f $out:expr;) => {
             __isql!(@FLUSH $out; [$($stack)*]);
-
-            #[repr(transparent)]
-            pub struct Columns($crate::pgt::Row);
-
-            impl From<$crate::pgt::Row> for Columns {
-                #[inline(always)]
-                fn from(row: $crate::pgt::Row) -> Self {
-                    Columns(row)
-                }
-            }
-
-            impl std::ops::Deref for Columns {
-                type Target = $crate::pgt::Row;
-
-                #[inline(always)]
-                fn deref(&self) -> &Self::Target {
-                    &self.0
-                }
-            }
         };
 
         ([$($stack:expr)*] ($first_export:ident $($exports:ident)*) f $out:expr;) => {
