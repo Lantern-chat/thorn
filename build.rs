@@ -283,7 +283,11 @@ macro_rules! __isql {
             __isql!(@ERROR ,);
         };
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; INSERT INTO $table:ident $(AS $alias:ident)? ( $($column:ident),* ) $($tt:tt)*) => {
-            __isql!([$($stack)* "INSERT INTO"] ($($exports)*) $nested $out; $table $(AS $alias)? ( $($table./$column),* ) $($tt)* );
+            // $table () can be interpreted as a function call without context, so go ahead and write the correct syntax here
+            __isql!(@FLUSH $out; [$($stack)* "INSERT INTO"]);
+            $out.write_table::<$table>()?;
+            $( type $alias = $table; )? // same as regular aliases
+            __isql!([] ($($exports)*) $nested $out; ( $($table./$column),* ) $($tt)* );
         };
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE ONLY $table:ident $(AS $alias:ident)? SET ( $($column:ident),* , ) $($tt:tt)*) => {
             __isql!(@ERROR ,);
