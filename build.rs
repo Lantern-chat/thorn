@@ -57,6 +57,21 @@ macro_rules! __isql {
             continue;
         };
 
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $macro:ident!($($it:tt)*); $($tt:tt)*) => {
+            $macro!($($it)*);
+            __isql!([$($stack)*] ($($exports)*) $nested $out; $($tt)*);
+        };
+
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $macro:ident!{$($it:tt)*}; $($tt:tt)*) => {
+            $macro!{$($it)*};
+            __isql!([$($stack)*] ($($exports)*) $nested $out; $($tt)*);
+        };
+
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $macro:ident![$($it:tt)*]; $($tt:tt)*) => {
+            $macro![$($it)*];
+            __isql!([$($stack)*] ($($exports)*) $nested $out; $($tt)*);
+        };
+
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; let $pat:pat_param = $expr:expr; $($tt:tt)*) => {
             let $pat = $expr;
             __isql!([$($stack)*] ($($exports)*) $nested $out; $($tt)*);
@@ -255,8 +270,9 @@ macro_rules! __isql {
 
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $table:ident.$column:ident AS @_ $($tt:tt)*) => {
             __isql!(@FLUSH $out; [$($stack)*]);
-            $out.write_column($table::$column)?;
             paste::paste! {
+                $out.write_column($table::$column, stringify!([<$table:snake>]))?;
+
                 __isql!(
                     ["AS" concat!("\"", stringify!([<$table:snake _ $column:snake>]), "\"") ]
                     ($($exports)* [<$table $column>]) $nested $out;
@@ -268,6 +284,13 @@ macro_rules! __isql {
         // `SELECT whatever AS @ExportedName` is the only valid syntax that does not conflict with absolute-value (@)
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; AS @$column:ident $($tt:tt)*) => {
             __isql!([ $($stack)* "AS" $crate::paste::paste!(concat!("\"", stringify!([<$column:snake>]), "\"")) ] ($($exports)* $column) $nested $out; $($tt)*);
+        };
+
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $table:ident AS $alias:ident $($tt:tt)*) => {
+            __isql!(@FLUSH $out; [$($stack)*]);
+            type $alias = $table;
+            $out.write_table::<$table>()?;
+            __isql!(["AS" paste::paste!(concat!("\"", stringify!([<$alias:snake>]), "\""))] ($($exports)*) $nested $out; $($tt)*);
         };
 
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; AS $table:ident.$column:ident $($tt:tt)*) => {
@@ -289,7 +312,7 @@ macro_rules! __isql {
         br##"
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $table:ident.$column:ident $($tt:tt)*) => {
             __isql!(@FLUSH $out; [$($stack)*]);
-            $out.write_column($table::$column)?;
+            paste::paste! { $out.write_column($table::$column, stringify!([<$table:snake>]))?; }
             __isql!([] ($($exports)*) $nested $out; $($tt)*);
         };
 
@@ -300,12 +323,6 @@ macro_rules! __isql {
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $var:ident--; $($tt:tt)*) => {
             $var -= 1;
             __isql!([$($stack)*] ($($exports)*) $nested $out; $($tt)*);
-        };
-
-        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $table:ident $($tt:tt)*) => {
-            __isql!(@FLUSH $out; [$($stack)*]);
-            $out.write_table::<$table>()?;
-            __isql!([] ($($exports)*) $nested $out; $($tt)*);
         };
 
         // parameters
@@ -329,7 +346,7 @@ macro_rules! __isql {
         };
 
         // parenthesis and function calls
-        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; .$func:ident ( $($it:tt)* ) $($tt:tt)*) => {
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $func:ident ( $($it:tt)* ) $($tt:tt)*) => {
             __isql!([$($stack)* stringify!($func)] ($($exports)*) $nested $out; ( $($it)* ) $($tt)*);
         };
 
@@ -342,7 +359,7 @@ macro_rules! __isql {
         };
 
         // arbitrary runtime function calls
-        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; .{$func:expr} ( $($it:tt)* ) $($tt:tt)*) => {
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; {$func:expr} ( $($it:tt)* ) $($tt:tt)*) => {
             __isql!(@FLUSH $out; [$($stack)*]);
             write!($out.inner(), "{}", $func)?;
             __isql!([] ($($exports)*) $nested $out; ( $($it)* ) $($tt)*);
@@ -355,6 +372,12 @@ macro_rules! __isql {
 
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; [ $($it:tt)* ] $($tt:tt)*) => {
             __isql!([$($stack)* "["] ($($exports)*) $nested $out; $($it)* [|] $($tt)*);
+        };
+
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $table:ident $($tt:tt)*) => {
+            __isql!(@FLUSH $out; [$($stack)*]);
+            $out.write_table::<$table>()?;
+            __isql!([] ($($exports)*) $nested $out; $($tt)*);
         };
 
         // arbitrary runtime expressions
@@ -458,6 +481,6 @@ macro_rules! __isql {
 }
 
 const TOKENS: &[&str] = &[
-    "->>", "#>>", "/||", "@@", "@>", "<@", "^@", "/|", "&&", "||", "()", "[]", "!!", "->", "#>", "<<", ">>",
-    "<>", "!=", ">=", "<=", ">", "<", "#", "~", "^", "|", "&", "%", "/", "*", "-", "+", "=", "!", ",", ";",
+    "->>", "#>>", "/||", "@@", "@>", "<@", "^@", "/|", "&&", "||", "()", "[]", "!!", "->", "#>", "<<", ">>", "<>",
+    "!=", ">=", "<=", ">", "<", "#", "~", "^", "|", "&", "%", "/", "*", "-", "+", "=", "!", ",", ";",
 ];

@@ -67,6 +67,11 @@ pub trait Table: Clone + Copy + Column + Sized + 'static {
     }
 }
 
+pub trait TableExt: Table {
+    const TYPENAME: &'static str;
+    const TYPENAME_SNAKE: &'static str;
+}
+
 #[macro_export]
 macro_rules! tables {
     (@DOC #[doc = $doc:literal]) => { concat!($doc, "\n") };
@@ -92,6 +97,11 @@ macro_rules! tables {
             const NAME: $crate::name::Name = $crate::name::Name::Default(stringify!([<$table:snake>])) $(.custom($rename))?;
             const ALIAS: Option<&'static str> = None;
             const COMMENT: &'static str = $crate::tables!(@DOC_START $(#[$($meta)*])*);
+        }
+
+        impl $crate::table::TableExt for $table {
+            const TYPENAME: &'static str = stringify!($table);
+            const TYPENAME_SNAKE: &'static str = stringify!([<$table:snake>]);
         }
 
         impl $crate::table::RealTable for $table {
@@ -321,12 +331,7 @@ pub trait RealTable: Table {
     fn verify() -> crate::query::SelectQuery {
         use crate::*;
 
-        let column_names = Self::COLUMNS
-            .iter()
-            .map(|c| c.name())
-            .collect::<Vec<_>>()
-            .lit()
-            .cast(Type::TEXT_ARRAY);
+        let column_names = Self::COLUMNS.iter().map(|c| c.name()).collect::<Vec<_>>().lit().cast(Type::TEXT_ARRAY);
 
         let column_types = Self::COLUMNS
             .iter()
@@ -335,12 +340,8 @@ pub trait RealTable: Table {
             .lit()
             .cast(Type::TEXT_ARRAY);
 
-        let column_nullable = Self::COLUMNS
-            .iter()
-            .map(|c| c.ty().nullable)
-            .collect::<Vec<_>>()
-            .lit()
-            .cast(Type::BOOL_ARRAY);
+        let column_nullable =
+            Self::COLUMNS.iter().map(|c| c.ty().nullable).collect::<Vec<_>>().lit().cast(Type::BOOL_ARRAY);
 
         let table_schema: Box<dyn ValueExpr> = match Self::SCHEMA {
             Schema::None => Box::new(().lit()),

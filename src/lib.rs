@@ -1,8 +1,8 @@
 #![recursion_limit = "256"]
 #![allow(unused_imports, clippy::wrong_self_convention)]
 
-pub extern crate tokio_postgres as pgt;
 pub extern crate postgres_types as pg;
+pub extern crate tokio_postgres as pgt;
 
 #[doc(hidden)]
 pub extern crate paste;
@@ -36,7 +36,7 @@ pub use collect::Collectable;
 pub use expr::{Expr, *};
 pub use params::Parameters;
 pub use query::{AnyQuery, Lateral, Query, TableAsExt, TableJoinExt, WithableQueryExt};
-pub use table::Table;
+pub use table::{Table, TableExt};
 
 #[cfg(test)]
 mod test {

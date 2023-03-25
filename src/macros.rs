@@ -32,7 +32,7 @@ impl<E: From<pgt::Row>> Default for Query<'_, E> {
 }
 
 use crate::{
-    table::{Column, Table},
+    table::{Column, Table, TableExt},
     Literal,
 };
 use std::{
@@ -87,11 +87,7 @@ impl<'a, E: From<pgt::Row>> Query<'a, E> {
                 if *existing_ty == pg::Type::ANY {
                     self.param_tys[idx] = ty;
                 } else if *existing_ty != ty {
-                    return Err(SqlFormatError::ConflictingParameterType(
-                        idx,
-                        ty,
-                        existing_ty.clone(),
-                    ));
+                    return Err(SqlFormatError::ConflictingParameterType(idx, ty, existing_ty.clone()));
                 }
             }
 
@@ -112,11 +108,12 @@ impl<'a, E: From<pgt::Row>> Query<'a, E> {
         self.inner().write_str(" ")
     }
 
-    pub fn write_column<T: Table>(&mut self, col: T) -> fmt::Result {
+    #[inline(always)]
+    pub fn write_column<T: TableExt>(&mut self, col: T, name: &'static str) -> fmt::Result {
         write!(
             self.inner(),
             "\"{}\".\"{}\" ",
-            <T as Table>::NAME.name(),
+            if name == T::TYPENAME_SNAKE { <T as Table>::NAME.name() } else { name },
             <T as Column>::name(&col)
         )
     }
@@ -166,13 +163,13 @@ macro_rules! sql {
 
 include!(concat!(env!("OUT_DIR"), "/sql_macro.rs"));
 
-// #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use crate::pg::Type;
     use crate::table::*;
 
     crate::tables! {
-        pub struct TestTable in MySchema {
+        pub struct TestTable as "renamed" in MySchema {
             SomeCol: Type::INT8,
             SomeCol2: Type::INT8,
         }
@@ -182,7 +179,7 @@ mod tests {
         }
     }
 
-    // #[test]
+    #[test]
     fn test_sql_macro() {
         let y = 21;
         let k = [String::from("test"); 1];
@@ -203,13 +200,13 @@ mod tests {
                 SELECT {i}
             }
 
-            .{"test"}(1)
+            {"test"}(1)
 
             for v in k {
                 SELECT {v}
             }
 
-            .{"test"}(1)
+            {"test"}(1)
 
             if true {
                 SELECT {"true"}
@@ -232,7 +229,11 @@ mod tests {
 
             let value = 1;
 
-            AND  .call()
+            AND  call()
+
+            if let Some(v) = Some(1) {
+
+            }
 
             match value {
                 2 => {},
@@ -254,10 +255,14 @@ mod tests {
                 }
             }
 
+            SELECT AliasTable.SomeCol
+
+            FROM TestTable AS AliasTable
+
             ARRAY_AGG()
             -- () && || |
             SELECT SIMILAR TO TestTable.SomeCol
-            FROM[#{&"test"}, 30]::_int8 #{&23 => Type::TEXT} ; .call_func({y}) "hel'lo"::text[] @{"'"}     { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{&1}
+            FROM[#{&"test"}, 30]::_int8 #{&23 => Type::TEXT} ; call_func({y}) "hel'lo"::text[] @{"'"}     { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{&1}
 
             1 AS @SomeCol,
             TestTable.SomeCol2 AS @_
