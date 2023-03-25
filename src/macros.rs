@@ -33,6 +33,7 @@ impl<E: From<pgt::Row>> Default for Query<'_, E> {
 
 use crate::{
     table::{Column, Table, TableExt},
+    func::Func,
     Literal,
 };
 use std::{
@@ -124,6 +125,11 @@ impl<'a, E: From<pgt::Row>> Query<'a, E> {
 
     pub fn write_column_name<C: Column>(&mut self, col: C) -> fmt::Result {
         write!(self.inner(), "\"{}\" ", col.name())
+    }
+
+    #[inline(always)]
+    pub fn write_func<F: Func>(&mut self) {
+        self.inner().push_str(F::NAME)
     }
 }
 

@@ -359,9 +359,9 @@ macro_rules! __isql {
         };
 
         // arbitrary runtime function calls
-        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; {$func:expr} ( $($it:tt)* ) $($tt:tt)*) => {
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; .$func:ident ( $($it:tt)* ) $($tt:tt)*) => {
             __isql!(@FLUSH $out; [$($stack)*]);
-            write!($out.inner(), "{}", $func)?;
+            $out.write_func::<$func>();
             __isql!([] ($($exports)*) $nested $out; ( $($it)* ) $($tt)*);
         };
 
