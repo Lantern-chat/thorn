@@ -155,6 +155,8 @@ macro_rules! sql {
         #[allow(clippy::redundant_closure_call, unreachable_code)]
         (|| -> Result<_, $crate::macros::SqlFormatError> {
             use std::fmt::Write;
+            use $crate::*;
+
             let mut __thorn_query = $crate::macros::Query::<Columns>::default();
             __isql!([] () f __thorn_query; $($tt)*);
             Ok(__thorn_query)
