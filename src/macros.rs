@@ -288,8 +288,10 @@ mod tests {
                 SomeCol
             )
 
-            UPDATE ONLY TestTable SET (SomeCol)
-            UPDATE TestTable AS Test SET (SomeCol)
+            UPDATE ONLY TestTable SET (SomeCol) = (1)
+            UPDATE TestTable AS Test SET (SomeCol) = (1)
+
+            DO UPDATE TestTable SET (SomCol) = (1)
 
             TestTable./SomeCol
 

@@ -272,24 +272,42 @@ macro_rules! __isql {
             );
         };
 
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; INSERT INTO $table:ident $(AS $alias:ident)? ( $($t:ident.$column:ident),* $(,)? ) $($tt:tt)*) => {
+            compile_error!("INSERT columns must use only column names, not table.column");
+        };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; SET ( $($table:ident.$column:ident),* $(,)? ) $($tt:tt)*) => {
+            compile_error!("UPDATE SET columns must use only column names, not table.column");
+        };
+
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; INSERT INTO $table:ident $(AS $alias:ident)? ( $($column:ident),* , ) $($tt:tt)*) => {
             __isql!(@ERROR ,);
         };
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; INSERT INTO $table:ident $(AS $alias:ident)? ( $($column:ident),* ) $($tt:tt)*) => {
-            __isql!([$($stack)*] ($($exports)*) $nested $out; INSERT INTO $table $(AS $alias)? ( $($table./$column),* ) $($tt)* );
+            __isql!([$($stack)* "INSERT INTO"] ($($exports)*) $nested $out; $table $(AS $alias)? ( $($table./$column),* ) $($tt)* );
         };
-
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE ONLY $table:ident $(AS $alias:ident)? SET ( $($column:ident),* , ) $($tt:tt)*) => {
             __isql!(@ERROR ,);
         };
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE $table:ident $(AS $alias:ident)? SET ( $($column:ident),* , ) $($tt:tt)*) => {
             __isql!(@ERROR ,);
         };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE ONLY $table:ident $(AS $alias:ident)? SET ( $column:ident ) $($tt:tt)*) => {
+            __isql!([$($stack)* "UPDATE ONLY"] ($($exports)*) $nested $out; $table $(AS $alias)? SET $table./$column $($tt)* );
+        };
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE ONLY $table:ident $(AS $alias:ident)? SET ( $($column:ident),* ) $($tt:tt)*) => {
-            __isql!([$($stack)*] ($($exports)*) $nested $out; UPDATE ONLY $table $(AS $alias)? SET ( $($table./$column),* ) $($tt)* );
+            __isql!([$($stack)* "UPDATE ONLY"] ($($exports)*) $nested $out; $table $(AS $alias)? SET ( $($table./$column),* ) $($tt)* );
+        };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE $table:ident $(AS $alias:ident)? SET ( $column:ident ) $($tt:tt)*) => {
+            __isql!([$($stack)* "UPDATE"] ($($exports)*) $nested $out; $table $(AS $alias)? SET $table./$column $($tt)* );
         };
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE $table:ident $(AS $alias:ident)? SET ( $($column:ident),* ) $($tt:tt)*) => {
-            __isql!([$($stack)*] ($($exports)*) $nested $out; UPDATE $table $(AS $alias)? SET ( $($table./$column),* ) $($tt)* );
+            __isql!([$($stack)* "UPDATE"] ($($exports)*) $nested $out; $table $(AS $alias)? SET ( $($table./$column),* ) $($tt)* );
+        };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE ONLY $table:ident $(AS $alias:ident)? SET $($tt:tt)*) => {
+            compile_error!("You must use the multi-column assignment form of UPDATE: UPDATE Table SET (Col, Col) = (Expr, Expr)");
+        };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE $table:ident $(AS $alias:ident)? SET $($tt:tt)*) => {
+            compile_error!("You must use the multi-column assignment form of UPDATE: UPDATE Table SET (Col, Col) = (Expr, Expr)");
         };
 
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; DO UPDATE SET $($tt:tt)*) => {
@@ -300,8 +318,14 @@ macro_rules! __isql {
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; DO UPDATE $table:ident SET ( $($column:ident),* , ) $($tt:tt)*) => {
             __isql!(@ERROR ,);
         };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; DO UPDATE $table:ident SET ( $column:ident ) $($tt:tt)*) => {
+            __isql!([$($stack)* "DO UPDATE SET"] ($($exports)*) $nested $out; $table./$column $($tt)* );
+        };
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; DO UPDATE $table:ident SET ( $($column:ident),* ) $($tt:tt)*) => {
-            __isql!([$($stack)*] ($($exports)*) $nested $out; DO UPDATE SET ( $($table./$column),* ) $($tt)* );
+            __isql!([$($stack)* "DO UPDATE SET"] ($($exports)*) $nested $out; ( $($table./$column),* ) $($tt)* );
+        };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; DO UPDATE $table:ident SET $($tt:tt)*) => {
+            compile_error!("You must use the multi-column assignment form of UPDATE: DO UPDATE Table SET (Col, Col) = (Expr, Expr)");
         };
 
         // WITH Table (Col, Col) AS ...
