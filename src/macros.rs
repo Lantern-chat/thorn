@@ -217,7 +217,7 @@ mod tests {
 
         // random hodgepodge of symbols to test the macro
         let res = sql! {
-            WITH AnonTable AS (
+            WITH AnonTable (Other) AS (
                 SELECT TestTable.SomeCol::{let ty = Type::BIT_ARRAY; ty} AS AnonTable.Other FROM TestTable
             )
             ----
@@ -254,7 +254,7 @@ mod tests {
 
             let value = 1;
 
-            AND  call()
+            AND  call(1, 2, 3)
 
             if let Some(v) = Some(1) {
 
@@ -283,6 +283,15 @@ mod tests {
             SELECT AliasTable.SomeCol
 
             FROM TestTable AS AliasTable
+
+            INSERT INTO TestTable (
+                SomeCol
+            )
+
+            UPDATE ONLY TestTable SET (SomeCol)
+            UPDATE TestTable AS Test SET (SomeCol)
+
+            TestTable./SomeCol
 
             ARRAY_AGG()
             -- () && || |

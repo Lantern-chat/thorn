@@ -27,6 +27,10 @@ macro_rules! __isql {
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; 2 $($tt:tt)*) =>
             { __isql!([$($stack)* "2"] ($($exports)*) $nested $out; $($tt)*); };
 
+        (@ERROR ,) => { compile_error!("Trailing commas are not supported in SQL") };
+        (@ERROR $tt:tt) => { $tt };
+        (@ERROR) => {};
+
         (@FLUSH $out:expr; [$($stack:expr)+]) => {
             $out.inner().push_str(concat!($($stack, " ",)*));
         };
@@ -268,6 +272,46 @@ macro_rules! __isql {
             );
         };
 
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; INSERT INTO $table:ident $(AS $alias:ident)? ( $($column:ident),* , ) $($tt:tt)*) => {
+            __isql!(@ERROR ,);
+        };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; INSERT INTO $table:ident $(AS $alias:ident)? ( $($column:ident),* ) $($tt:tt)*) => {
+            __isql!([$($stack)*] ($($exports)*) $nested $out; INSERT INTO $table $(AS $alias)? ( $($table./$column),* ) $($tt)* );
+        };
+
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE ONLY $table:ident $(AS $alias:ident)? SET ( $($column:ident),* , ) $($tt:tt)*) => {
+            __isql!(@ERROR ,);
+        };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE $table:ident $(AS $alias:ident)? SET ( $($column:ident),* , ) $($tt:tt)*) => {
+            __isql!(@ERROR ,);
+        };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE ONLY $table:ident $(AS $alias:ident)? SET ( $($column:ident),* ) $($tt:tt)*) => {
+            __isql!([$($stack)*] ($($exports)*) $nested $out; UPDATE ONLY $table $(AS $alias)? SET ( $($table./$column),* ) $($tt)* );
+        };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; UPDATE $table:ident $(AS $alias:ident)? SET ( $($column:ident),* ) $($tt:tt)*) => {
+            __isql!([$($stack)*] ($($exports)*) $nested $out; UPDATE $table $(AS $alias)? SET ( $($table./$column),* ) $($tt)* );
+        };
+
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; DO UPDATE SET $($tt:tt)*) => {
+            compile_error!("Use `DO UPDATE TableName SET` instead for conflict actions.");
+        };
+
+        // modified syntax for conflict actions, DO UPDATE Table SET (Col, Col) = (Value, Value)
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; DO UPDATE $table:ident SET ( $($column:ident),* , ) $($tt:tt)*) => {
+            __isql!(@ERROR ,);
+        };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; DO UPDATE $table:ident SET ( $($column:ident),* ) $($tt:tt)*) => {
+            __isql!([$($stack)*] ($($exports)*) $nested $out; DO UPDATE SET ( $($table./$column),* ) $($tt)* );
+        };
+
+        // WITH Table (Col, Col) AS ...
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $table:ident ( $($column:ident),* , ) AS $($tt:tt)*) => {
+            __isql!(@ERROR ,);
+        };
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $table:ident ( $($column:ident),* ) AS $($tt:tt)*) => {
+            __isql!([$($stack)*] ($($exports)*) $nested $out; $table ( $($table./$column),* ) AS $($tt)* );
+        };
+
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $table:ident.$column:ident AS @_ $($tt:tt)*) => {
             __isql!(@FLUSH $out; [$($stack)*]);
             paste::paste! {
@@ -310,6 +354,13 @@ macro_rules! __isql {
 
     file.write_all(
         br##"
+        // explicitely only use column name
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $table:ident./$column:ident $($tt:tt)*) => {
+            __isql!(@FLUSH $out; [$($stack)*]);
+            paste::paste! { $out.write_column_name($table::$column)?; }
+            __isql!([] ($($exports)*) $nested $out; $($tt)*);
+        };
+
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $table:ident.$column:ident $($tt:tt)*) => {
             __isql!(@FLUSH $out; [$($stack)*]);
             paste::paste! { $out.write_column($table::$column, stringify!([<$table:snake>]))?; }
@@ -351,11 +402,11 @@ macro_rules! __isql {
         };
 
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; , (|) $($tt:tt)*) => {
-            compile_error!("Trailing commas are not supported in SQL");
+            __isql!(@ERROR ,);
         };
 
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; , [|] $($tt:tt)*) => {
-            compile_error!("Trailing commas are not supported in SQL");
+            __isql!(@ERROR ,);
         };
 
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; (|) $($tt:tt)*) => {
