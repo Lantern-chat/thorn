@@ -19,6 +19,10 @@ macro_rules! functions {
 
         #[allow(clippy::too_many_arguments)]
         impl $name {
+            #[doc(hidden)]
+            #[allow(unused)]
+            pub const fn $name( $( $arg: (), )* ) {}
+
             $(#[$meta])*
             $vis fn call($($arg: impl $crate::ValueExpr + 'static),*) -> $crate::Call {
                 use $crate::{func::Func, expr::CastExt};
@@ -36,5 +40,5 @@ macro_rules! functions {
 }
 
 functions! {
-    pub extern "pg" fn test_fn(v: pg::Type::TEXT) in TestSchema;
+    pub(crate) extern "pg" fn test_fn(v: pg::Type::TEXT, x: pg::Type::INT8) in TestSchema;
 }

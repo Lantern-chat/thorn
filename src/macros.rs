@@ -193,6 +193,8 @@ mod tests {
     use crate::pg::Type;
     use crate::table::*;
 
+    use crate::func::test_fn;
+
     crate::tables! {
         pub struct TestTable as "renamed" in MySchema {
             SomeCol: Type::INT8,
@@ -230,6 +232,8 @@ mod tests {
             for v in k {
                 SELECT {v}
             }
+
+            .test_fn(1, 1)
 
             {"test"}(1)
 
@@ -291,7 +295,7 @@ mod tests {
             UPDATE ONLY TestTable SET (SomeCol) = (1)
             UPDATE TestTable AS Test SET (SomeCol) = (1)
 
-            DO UPDATE TestTable SET (SomCol) = (1)
+            DO UPDATE TestTable SET (SomeCol) = (1)
 
             TestTable./SomeCol
 

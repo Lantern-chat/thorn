@@ -445,10 +445,73 @@ macro_rules! __isql {
             __isql!([$($stack)* "("] ($($exports)*) $nested $out; $($it)* (|) $($tt)* );
         };
 
+        (@VERIFY $func:ident
+            params = ($($param:tt)*)
+            rest = ( [$($it:tt)*] $($tt:tt)*)
+        ) => {
+            __isql!(@VERIFY $func
+                params = ($($params)*)
+                rest = ($($tt)*)
+            );
+        };
+
+        (@VERIFY $func:ident
+            params = ($($params:tt)*)
+            rest = ( ( $($it:tt)* ) $($tt:tt)*)
+        ) => {
+            __isql!(@VERIFY $func
+                params = ($($params)*)
+                rest = ($($tt)*)
+            );
+        };
+
+        (@VERIFY $func:ident
+            params = ($($params:tt)*)
+            rest = (, $($tt:tt)*)
+        ) => {
+            __isql!(@VERIFY $func
+                params = ($($params)* , ())
+                rest = ($($tt)*)
+            );
+        };
+
+        (@VERIFY $func:ident
+            params = ($($params:tt)+)
+            rest = ($next:tt $($tt:tt)*)
+        ) => {
+            __isql!(@VERIFY $func
+                params = ($($params)*)
+                rest = ($($tt)*)
+            );
+        };
+
+        (@VERIFY $func:ident
+            params = ()
+            rest = ($next:tt $($tt:tt)*)
+        ) => {
+            __isql!(@VERIFY $func
+                params = (())
+                rest = ($($tt)*)
+            );
+        };
+
+        (@VERIFY $func:ident
+            params = ($($params:tt)*)
+            rest = ()
+        ) => {
+            $func::$func( $($params)* );
+        };
+
         // arbitrary runtime function calls
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; .$func:ident ( $($it:tt)* ) $($tt:tt)*) => {
             __isql!(@FLUSH $out; [$($stack)*]);
             $out.write_func::<$func>();
+
+            __isql!(@VERIFY $func
+                params = ()
+                rest = ($($it)*)
+            );
+
             __isql!([] ($($exports)*) $nested $out; ( $($it)* ) $($tt)*);
         };
 
