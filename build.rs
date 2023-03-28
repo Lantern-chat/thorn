@@ -52,12 +52,12 @@ macro_rules! __isql {
         };
 
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; break; $($tt:tt)*) => {
-            __isql!(@FLUSH $nested $out; [$($stack)*]);
+            __isql!(@FLUSH $out; [$($stack)*]);
             break;
         };
 
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; continue; $($tt:tt)*) => {
-            __isql!(@FLUSH $nested $out; [$($stack)*]);
+            __isql!(@FLUSH $out; [$($stack)*]);
             continue;
         };
 
@@ -356,6 +356,13 @@ macro_rules! __isql {
         // `SELECT whatever AS @ExportedName` is the only valid syntax that does not conflict with absolute-value (@)
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; AS @$column:ident $($tt:tt)*) => {
             __isql!([ $($stack)* "AS" $crate::paste::paste!(concat!("\"", stringify!([<$column:snake>]), "\"")) ] ($($exports)* $column) $nested $out; $($tt)*);
+        };
+
+        // fixes syntax ambiguity with rule below this one
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $word:ident AS $table:ident.$column:ident $($tt:tt)*) => {
+            __isql!([$($stack)*] () $nested $out; $word AS);
+            $out.write_column_name($table::$column)?;
+            __isql!([] ($($exports)*) $nested $out; $($tt)*);
         };
 
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; $table:ident AS $alias:ident $($tt:tt)*) => {
