@@ -314,7 +314,7 @@ pub trait RealTable: Table {
     /// cross-referencing with PostgreSQL's `information_schema.columns` table.
     ///
     /// Returns
-    /// ```
+    /// ```ignore
     /// [
     ///     matches: bool,
     ///     column_name: text,

@@ -32,7 +32,7 @@ macro_rules! __isql {
         (@ERROR) => {};
 
         (@FLUSH $out:expr; [$($stack:expr)+]) => {
-            $out.inner().push_str(concat!($($stack, " ",)*));
+            $out.write_str(concat!($($stack, " ",)*));
         };
 
         (@FLUSH $out:expr; []) => {};
@@ -183,7 +183,7 @@ macro_rules! __isql {
             let mut __thorn_first = true;
             for $pat in $($iter)* {
                 if !__thorn_first {
-                    $out.inner().push_str(($($join,)? ",",).0);
+                    $out.write_str(($($join,)? ",",).0);
                 }
                 __thorn_first = false;
                 __isql!([] () t $out; $($rest)*);
@@ -412,9 +412,9 @@ macro_rules! __isql {
         };
 
         // parameters
-        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; #{$param:expr $(=> $ty:expr)?} $($tt:tt)*) => {
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; #{$param:expr => $ty:expr} $($tt:tt)*) => {
             __isql!(@FLUSH $out; [$($stack)*]);
-            $out.param($param, ($($ty.into(),)? $crate::pg::Type::ANY,).0)?;
+            $out.param($param, $ty.into())?;
             __isql!([] ($($exports)*) $nested $out; $($tt)*);
         };
 

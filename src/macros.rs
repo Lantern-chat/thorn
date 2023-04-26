@@ -32,8 +32,8 @@ impl<E: From<pgt::Row>> Default for Query<'_, E> {
 }
 
 use crate::{
-    table::{Column, Table, TableExt},
     func::Func,
+    table::{Column, Table, TableExt},
     Literal,
 };
 use std::{
@@ -119,6 +119,12 @@ impl<'a, E: From<pgt::Row>> Query<'a, E> {
         )
     }
 
+    #[inline(always)]
+    pub fn write_str(&mut self, s: &str) {
+        self.inner().push_str(s)
+    }
+
+    #[inline]
     pub fn write_table<T: Table>(&mut self) -> fmt::Result {
         crate::query::from_item::__write_table::<T>(self)
     }
