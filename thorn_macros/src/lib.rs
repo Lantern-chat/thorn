@@ -16,12 +16,14 @@ pub fn sql2(input: TokenStream) -> TokenStream {
 mod lit;
 //mod punct;
 
-use syn::{parse::ParseStream, Expr, Ident, Token};
+use syn::{ext::IdentExt, parse::ParseStream, Expr, Ident, Token};
 
 mod kw {
     syn::custom_keyword!(INTO);
     syn::custom_keyword!(FROM);
     syn::custom_keyword!(AS);
+
+    syn::custom_keyword!(join);
 }
 
 #[derive(Default)]
@@ -51,7 +53,7 @@ impl State {
         let token = chars.next().unwrap();
         let maybe_ws = chars.next().unwrap();
 
-        if maybe_ws.is_whitespace() && matches!(token, ',' | ')') {
+        if maybe_ws.is_whitespace() && matches!(token, ',' | ')' | ']') {
             self.stack.truncate(start);
             self.stack.push(token);
         }
@@ -89,8 +91,10 @@ impl State {
 
     fn flush(&mut self, out: &mut TokenStream2) {
         if !self.stack.is_empty() {
-            let stack = std::mem::take(&mut self.stack);
-            let stack = stack.trim();
+            let mut stack = std::mem::take(&mut self.stack);
+            if !stack.ends_with(' ') {
+                stack.push_str(" ");
+            }
             out.extend(quote::quote! { __out.write_str(#stack); });
         }
     }
@@ -149,6 +153,29 @@ impl State {
                     out.extend(quote::quote! { __out.write_column_name(#table::#column)?; });
                 }
 
+                _ if is_macro(input) => {
+                    input.parse::<syn::Stmt>()?.to_tokens(&mut out);
+                }
+
+                _ if input.peek(Token![match]) => {
+                    self.flush(&mut out);
+                    parse_match(input, self)?.to_tokens(&mut out);
+                }
+
+                _ if input.peek(Token![if]) => {
+                    self.flush(&mut out);
+                    parse_if(input, self)?.to_tokens(&mut out);
+                }
+
+                _ if (input.peek(Token![for]) || input.peek(kw::join))
+                    || (input.peek(syn::Lifetime)
+                        && input.peek2(Token![:])
+                        && (input.peek3(Token![for]) || input.peek3(kw::join))) =>
+                {
+                    self.flush(&mut out);
+                    parse_for(input, self)?.to_tokens(&mut out);
+                }
+
                 _ if input.peek(Ident) => {
                     let ident: Ident = input.parse()?;
 
@@ -175,14 +202,9 @@ impl State {
                     }
                 }
 
-                _ if input.peek(Token![match]) => {
-                    self.flush(&mut out);
-                    parse_match(input, self)?.to_tokens(&mut out);
-                }
-
                 // SQL literals
                 _ if input.peek(syn::Lit) => {
-                    lit::parse_lit(input, self)?;
+                    lit::push_lit(lit::parse_lit(input)?, self);
                 }
 
                 // parameters #{&value as Type::INT4}
@@ -204,7 +226,7 @@ impl State {
 
                 // deny other Rust keywords, if they aren't part of built-in syntax or arbitrary statements
                 _ if is_rust_keyword(input) => {
-                    return Err(input.error("Unexpected keyword"));
+                    return Err(input.error("Unexpected Rust keyword"));
                 }
 
                 // { ... }, runtime literals
@@ -257,8 +279,36 @@ impl State {
 }
 
 fn is_rust_keyword(input: ParseStream) -> bool {
-    use syn::ext::IdentExt;
     input.peek(Ident::peek_any) && !input.peek(Ident)
+}
+
+fn is_macro(input: ParseStream) -> bool {
+    if input.peek(Ident::peek_any) {
+        if input.peek2(Token![!]) {
+            return true;
+        }
+
+        let fork = input.fork();
+        if fork.peek2(Token![::]) && syn::Path::parse_mod_style(&fork).is_ok() && fork.peek(Token![!]) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn is_stmt(input: ParseStream) -> bool {
+    if input.peek(Token![let])
+        || input.peek(Token![const])
+        || input.peek(Token![use])
+        || input.peek(Token![continue])
+        || input.peek(Token![break])
+        || is_macro(input)
+    {
+        return true;
+    }
+
+    false
 }
 
 struct Match {
@@ -277,44 +327,33 @@ struct Arm {
     comma: Option<Token![,]>,
 }
 
+enum Else {
+    If(If),
+    Block((syn::token::Brace, TokenStream2)),
+}
+
 struct If {
     if_token: Token![if],
     cond: Box<Expr>,
     brace_token: syn::token::Brace,
     then_branch: TokenStream2,
-    else_branch: Option<(Token![else], TokenStream2)>,
+    else_branch: Option<(Token![else], Box<Else>)>,
 }
 
 struct For {
     label: Option<syn::Label>,
     for_token: Token![for],
+    joiner: Option<syn::LitStr>,
     pat: Box<syn::Pat>,
     in_token: Token![in],
     expr: Box<Expr>,
+    brace_token: syn::token::Brace,
     body: TokenStream2,
-}
-
-fn is_stmt(input: ParseStream) -> bool {
-    if input.peek(Token![let])
-        || input.peek(Token![const])
-        || input.peek(Token![use])
-        || input.peek(Token![continue])
-        || input.peek(Token![break])
-    {
-        return true;
-    }
-
-    // macros
-    if input.peek(Ident) && (input.peek2(Token![!]) || input.peek2(Token![::])) {
-        return true;
-    }
-
-    false
 }
 
 fn parse_match(input: ParseStream, state: &mut State) -> syn::Result<Match> {
     let match_token = input.parse()?;
-    let expr = input.parse()?;
+    let expr = Expr::parse_without_eager_brace(input)?;
 
     let content;
     let brace_token = syn::braced!(content in input);
@@ -326,7 +365,7 @@ fn parse_match(input: ParseStream, state: &mut State) -> syn::Result<Match> {
 
     Ok(Match {
         match_token,
-        expr,
+        expr: Box::new(expr),
         brace_token,
         arms,
     })
@@ -346,16 +385,7 @@ impl ToTokens for Match {
 
         brace_token.surround(tokens, |tokens| {
             for arm in arms {
-                arm.pat.to_tokens(tokens);
-                if let Some((ref if_token, ref cond)) = arm.guard {
-                    if_token.to_tokens(tokens);
-                    cond.to_tokens(tokens);
-                }
-                arm.fat_arrow_token.to_tokens(tokens);
-                arm.brace_token.surround(tokens, |tokens| {
-                    arm.body.to_tokens(tokens);
-                });
-                arm.comma.to_tokens(tokens);
+                arm.to_tokens(tokens);
             }
         });
     }
@@ -378,4 +408,165 @@ fn parse_arm(input: ParseStream, state: &mut State) -> syn::Result<Arm> {
         body,
         comma,
     })
+}
+
+impl ToTokens for Arm {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        self.pat.to_tokens(tokens);
+        if let Some((ref if_token, ref cond)) = self.guard {
+            if_token.to_tokens(tokens);
+            cond.to_tokens(tokens);
+        }
+        self.fat_arrow_token.to_tokens(tokens);
+        self.brace_token.surround(tokens, |tokens| {
+            self.body.to_tokens(tokens);
+        });
+        self.comma.to_tokens(tokens);
+    }
+}
+
+fn parse_if(input: ParseStream, state: &mut State) -> syn::Result<If> {
+    let if_token = input.parse()?;
+    let cond = Expr::parse_without_eager_brace(input)?;
+    let then;
+    let brace_token = syn::braced!(then in input);
+    let then_branch = state.parse_nested(&then)?;
+
+    let else_branch = if input.peek(Token![else]) {
+        let else_token = input.parse()?;
+
+        let else_branch = if input.peek(Token![if]) {
+            Else::If(parse_if(input, state)?)
+        } else {
+            Else::Block({
+                let inner;
+                let brace_token = syn::braced!(inner in input);
+
+                (brace_token, state.parse_nested(&inner)?)
+            })
+        };
+
+        Some((else_token, Box::new(else_branch)))
+    } else {
+        None
+    };
+
+    Ok(If {
+        if_token,
+        cond: Box::new(cond),
+        brace_token,
+        then_branch,
+        else_branch,
+    })
+}
+
+impl ToTokens for If {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let If {
+            if_token,
+            cond,
+            brace_token,
+            then_branch,
+            else_branch,
+        } = self;
+
+        if_token.to_tokens(tokens);
+        cond.to_tokens(tokens);
+
+        brace_token.surround(tokens, |tokens| {
+            then_branch.to_tokens(tokens);
+        });
+
+        if let Some((else_token, else_branch)) = else_branch {
+            else_token.to_tokens(tokens);
+
+            match **else_branch {
+                Else::Block(ref block) => {
+                    let (ref brace, ref block) = *block;
+                    brace.surround(tokens, |tokens| block.to_tokens(tokens));
+                }
+                Else::If(ref else_if) => else_if.to_tokens(tokens),
+            }
+        }
+    }
+}
+
+fn parse_for(input: ParseStream, state: &mut State) -> syn::Result<For> {
+    let label = if input.peek(syn::Lifetime) { Some(input.parse()?) } else { None };
+
+    let mut joiner = None;
+    let for_token: Token![for] = if input.peek(kw::join) {
+        let join_token = input.parse::<kw::join>()?;
+
+        joiner = Some(if input.peek(syn::token::Paren) {
+            let joiner_input;
+            syn::parenthesized!(joiner_input in input);
+
+            joiner_input.parse()?
+        } else {
+            syn::LitStr::new(",", join_token.span)
+        });
+
+        Token![for](join_token.span)
+    } else {
+        input.parse()?
+    };
+
+    let pat = syn::Pat::parse_multi_with_leading_vert(input)?;
+
+    let in_token = input.parse()?;
+    let expr = Expr::parse_without_eager_brace(input)?;
+
+    let inner;
+    let brace_token = syn::braced!(inner in input);
+    let body = state.parse_nested(&inner)?;
+
+    Ok(For {
+        label,
+        for_token,
+        joiner,
+        pat: Box::new(pat),
+        in_token,
+        expr: Box::new(expr),
+        brace_token,
+        body,
+    })
+}
+
+impl ToTokens for For {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let For {
+            label,
+            for_token,
+            joiner,
+            pat,
+            in_token,
+            expr,
+            brace_token,
+            body,
+        } = self;
+
+        if joiner.is_some() {
+            tokens.extend(quote::quote! {
+                let mut __first = true;
+            });
+        }
+
+        label.to_tokens(tokens);
+        for_token.to_tokens(tokens);
+        pat.to_tokens(tokens);
+        in_token.to_tokens(tokens);
+        expr.to_tokens(tokens);
+
+        brace_token.surround(tokens, |tokens| {
+            if let Some(ref joiner) = joiner {
+                tokens.extend(quote::quote! {
+                    if !__first { __out.write_str(#joiner); }
+                    __first = false;
+                });
+            }
+
+            body.to_tokens(tokens);
+        });
+    }
 }
