@@ -139,9 +139,8 @@ impl State {
                 self.rewrite_spacing();
             }
 
-            match t {
-                TokenTree::Punct(ref p) if p.spacing() == Spacing::Joint => {}
-                _ => self.stack.push_str(" "),
+            if !matches!(t, TokenTree::Punct(ref p) if p.spacing() == Spacing::Joint) {
+                self.stack.push_str(" ")
             }
         }
     }
@@ -487,8 +486,15 @@ impl State {
                     *comma_counter += 1;
                 }
 
-                // passthrough as text
-                _ => self.push(input.parse::<proc_macro2::TokenTree>()?),
+                _ => {
+                    // attempt to parse known SQL operators
+                    if let Some(op) = parse_sql_operator(input)? {
+                        self.push_str(op);
+                    } else {
+                        // passthrough as text
+                        self.push(input.parse::<proc_macro2::TokenTree>()?);
+                    }
+                }
             }
         }
 
