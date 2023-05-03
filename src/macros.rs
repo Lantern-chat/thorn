@@ -161,10 +161,11 @@ impl<'a, E: From<pgt::Row>> Query<'a, E> {
 #[macro_export]
 macro_rules! sql {
     ($($tt:tt)*) => {{
-        #[allow(clippy::redundant_closure_call, unreachable_code)]
+        #[allow(clippy::redundant_closure_call, unreachable_code, unused_braces)]
         (|| -> Result<_, $crate::macros::SqlFormatError> {
             use std::fmt::Write;
             use $crate::*;
+            use $crate::pgt::{types::{Type, FromSql}, Error as PgError};
 
             #[repr(transparent)]
             pub struct Columns($crate::pgt::Row);
@@ -186,7 +187,7 @@ macro_rules! sql {
             }
 
             let mut __thorn_query = $crate::macros::Query::<Columns>::default();
-            __isql!([] () f __thorn_query; $($tt)*);
+            thorn_macros::__isql2!(__thorn_query $($tt)*);
             Ok(__thorn_query)
         }())
     }};
