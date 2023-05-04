@@ -2,6 +2,7 @@
 #![allow(unused_imports, clippy::wrong_self_convention)]
 
 pub extern crate postgres_types as pg;
+pub extern crate thorn_macros;
 pub extern crate tokio_postgres as pgt;
 
 #[doc(hidden)]

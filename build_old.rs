@@ -419,8 +419,17 @@ macro_rules! __isql {
         };
 
         // casts
-        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; :: $param:ident $($tt:tt)*) => {
-            __isql!([$($stack)* "::" stringify!($param)] ($($exports)*) $nested $out; $($tt)*);
+        // ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; :: $param:ident $($tt:tt)*) => {
+        //     __isql!([$($stack)* "::" stringify!($param)] ($($exports)*) $nested $out; $($tt)*);
+        // };
+
+        ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; ::$value:ident $($tt:tt)*) => {
+            __isql!(@FLUSH $out; [$($stack)* "::"]);
+            $crate::paste::paste! {
+                $out.write_str($crate::pg::Type::[<$value:upper>].name());
+            }
+            // cheat lack of space after this write_str by pushing an empty string
+            __isql!([""] ($($exports)*) $nested $out; $($tt)*);
         };
 
         ([$($stack:expr)*] ($($exports:ident)*) $nested:ident $out:expr; () $($tt:tt)*) => {

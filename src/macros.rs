@@ -105,15 +105,14 @@ impl<'a, E: From<pgt::Row>> Query<'a, E> {
 
     #[inline(always)]
     pub fn write_literal<L: Literal>(&mut self, lit: L) -> fmt::Result {
-        lit.collect_literal(self.inner(), 0)?;
-        self.inner().write_str(" ")
+        lit.collect_literal(self.inner(), 0)
     }
 
     #[inline(always)]
     pub fn write_column<T: TableExt>(&mut self, col: T, name: &'static str) -> fmt::Result {
         write!(
             self.inner(),
-            "\"{}\".\"{}\" ",
+            "\"{}\".\"{}\"",
             if name == T::TYPENAME_SNAKE { <T as Table>::NAME.name() } else { name },
             <T as Column>::name(&col)
         )
@@ -187,13 +186,11 @@ macro_rules! sql {
             }
 
             let mut __thorn_query = $crate::macros::Query::<Columns>::default();
-            thorn_macros::__isql2!(__thorn_query $($tt)*);
+            $crate::thorn_macros::__isql2!(__thorn_query $($tt)*);
             Ok(__thorn_query)
         }())
     }};
 }
-
-include!(concat!(env!("OUT_DIR"), "/sql_macro.rs"));
 
 #[cfg(test)]
 mod tests {
@@ -229,8 +226,8 @@ mod tests {
             WITH AnonTable (Other) AS (
                 SELECT TestTable.SomeCol::{let ty = Type::BIT_ARRAY; ty} AS AnonTable.Other FROM TestTable
             )
-            ----
-            for-join{"%"} i in [1, 2, 3] {
+            $$ $$
+            join("%") i in [1, 2, 3] {
                 SELECT {i}
             }
 
@@ -240,21 +237,19 @@ mod tests {
                 SELECT {v}
             }
 
-            .test_fn(1, 1)
+            .test_fn(1, (1, 2, 3, 4))
 
             {"test"}(1)
 
-            if true {
+            if 1 == 1 {
                 SELECT {"true"}
+            } else if 2 != 2 {
+                SELECT "false"
             } else {
-                if true {
-                    SELECT "false"
-                } else {
-                    TRUE
+                TRUE
 
-                    // triggers compile_fail!
-                    //SELECT 1 AS @TestTable.SomeCol
-                }
+                // triggers compile_fail!
+                //SELECT 1 AS @TestTable.SomeCol
             }
 
             if let Some(value) = Some("") {
@@ -307,9 +302,9 @@ mod tests {
             TestTable./SomeCol
 
             ARRAY_AGG()
-            -- () && || |
+            $$ () && || |
             SELECT SIMILAR TO TestTable.SomeCol
-            FROM[#{&"test"}, 30]::_int8 #{&23 => Type::TEXT} ; call_func({y}) "hel'lo"::text[] @{"'"}     { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{&1}
+            FROM[#{&"test" as Type::TEXT}, 30]::int8_array #{&23 as Type::TEXT} ; call_func({y}) "hel'lo"::text[] @{"'"}     { let x = 10; x + y } !! TestTable WHERE < AND NOT = #{&1 as Type::INT8}
 
             1 AS @SomeCol,
             TestTable.SomeCol2 AS @_

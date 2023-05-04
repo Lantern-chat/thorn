@@ -2,7 +2,7 @@
 
 extern crate proc_macro;
 
-use heck::ToSnakeCase;
+use heck::{ToSnakeCase, ToUpperCamelCase};
 use proc_macro::TokenStream;
 use proc_macro2::{Spacing, Span, TokenStream as TokenStream2, TokenTree};
 use quote::ToTokens;
@@ -19,21 +19,27 @@ fn do_parse(input: ParseStream) -> syn::Result<TokenStream2> {
 
     let mut state = State {
         writer,
+        ident: Default::default(),
         buffer: Default::default(),
-        stack: Default::default(),
         exports: Default::default(),
-        current_table: Default::default(),
-        depth: Default::default(),
+        cte: None,
+        depth: 0,
     };
 
     let mut tokens = state.parse(input, &mut 0)?;
 
-    state.flush(&mut tokens);
+    // final flush, after trim
+    state.buffer.truncate(state.buffer.trim_end().len());
+    if !state.buffer.is_empty() {
+        let writer = &state.writer;
+        let buffer = &state.buffer;
+        tokens.extend(quote::quote! { #writer.write_str(#buffer); });
+    }
 
-    if let Some(first) = state.exports.swap_remove_index(0) {
-        let mut buffer = state.buffer;
+    if let Some(first) = state.exports.first() {
+        let mut buffer = state.ident;
 
-        let accessors = std::iter::once(&first).chain(&state.exports).map(|export| {
+        let accessors = state.exports.iter().map(|export| {
             let snake = buffer.ident(export).to_snake_case();
 
             let name = Ident::new(&snake, export.span());
@@ -46,7 +52,7 @@ fn do_parse(input: ParseStream) -> syn::Result<TokenStream2> {
             }
         });
 
-        let exports = state.exports.iter();
+        let exports = state.exports.iter().skip(1);
 
         tokens.extend(quote::quote! {
             #[allow(clippy::enum_variant_names)]
@@ -68,9 +74,12 @@ fn do_parse(input: ParseStream) -> syn::Result<TokenStream2> {
 mod lit;
 //mod punct;
 
+const TRAILING_COMMA: &str = "Trailing commas are not allowed in SQL";
+
 use syn::{
     ext::IdentExt,
-    parse::ParseStream,
+    parse::{Parse, ParseStream},
+    punctuated::{Pair, Punctuated},
     token::{Brace, Bracket, Paren},
     Error, Expr, Ident, LitStr, Token,
 };
@@ -79,6 +88,9 @@ mod kw {
     syn::custom_keyword!(INTO);
     syn::custom_keyword!(FROM);
     syn::custom_keyword!(AS);
+    syn::custom_keyword!(SET);
+    syn::custom_keyword!(UPDATE);
+    syn::custom_keyword!(DO);
 
     syn::custom_keyword!(join);
 }
@@ -96,34 +108,38 @@ impl IdentBuffer {
         write!(self.buffer, "{}", ident).unwrap();
         &self.buffer
     }
+
+    fn take_ident(&mut self, ident: &Ident) -> String {
+        self.ident(ident);
+        std::mem::take(&mut self.buffer)
+    }
 }
 
 struct State {
     writer: Ident,
-    buffer: IdentBuffer,
-    stack: String,
+    ident: IdentBuffer,
+    buffer: String,
     exports: indexmap::IndexSet<Ident>,
-    /// When working within a table
-    current_table: Option<Ident>,
+    cte: Option<Ident>,
     depth: usize,
 }
 
 impl State {
     fn ident(&mut self, ident: &Ident) -> &str {
-        self.buffer.ident(ident)
+        self.ident.ident(ident)
     }
 
     fn rewrite_spacing(&mut self) {
-        let Some(start) = self.stack.len().checked_sub(2) else { return; };
+        let Some(start) = self.buffer.len().checked_sub(2) else { return; };
 
-        let mut chars = self.stack.chars().rev();
+        let mut chars = self.buffer.chars().rev();
 
         let token = chars.next().unwrap();
         let maybe_ws = chars.next().unwrap();
 
         if maybe_ws.is_whitespace() && matches!(token, ',' | ')' | ']') {
-            self.stack.truncate(start);
-            self.stack.push(token);
+            self.buffer.truncate(start);
+            self.buffer.push(token);
         }
     }
 
@@ -131,39 +147,39 @@ impl State {
         use std::fmt::Write;
 
         for t in tokens.into_token_stream() {
-            let old_len = self.stack.len();
-            write!(self.stack, "{}", t).unwrap();
+            let old_len = self.buffer.len();
+            write!(self.buffer, "{}", t).unwrap();
 
             // single-byte token, check for punctuation rewrite
-            if old_len + 1 == self.stack.len() {
+            if old_len + 1 == self.buffer.len() {
                 self.rewrite_spacing();
             }
 
             if !matches!(t, TokenTree::Punct(ref p) if p.spacing() == Spacing::Joint) {
-                self.stack.push_str(" ")
+                self.buffer.push_str(" ")
             }
         }
     }
 
     fn push_str(&mut self, token: impl AsRef<str>) {
         let token = token.as_ref();
-        self.stack.push_str(token);
+        self.buffer.push_str(token);
         if token.len() == 1 {
             self.rewrite_spacing();
         }
         if !matches!(token, "(" | "[" | "::") {
-            self.stack.push_str(" ");
+            self.buffer.push_str(" ");
         }
     }
 
     fn flush(&mut self, out: &mut TokenStream2) {
-        if !self.stack.is_empty() {
-            let mut stack = std::mem::take(&mut self.stack);
-            if !(stack.ends_with(&[' ', '(', '[']) || stack.ends_with("::")) {
-                stack.push_str(" ");
+        if !self.buffer.is_empty() {
+            let mut buffer = std::mem::take(&mut self.buffer);
+            if !(buffer.ends_with(&[' ', '(', '[']) || buffer.ends_with("::")) {
+                buffer.push_str(" ");
             }
             let writer = &self.writer;
-            out.extend(quote::quote! { #writer.write_str(#stack); });
+            out.extend(quote::quote! { #writer.write_str(#buffer); });
         }
     }
 
@@ -185,14 +201,165 @@ impl State {
         Ok(())
     }
 
+    fn push_if_keyword(&mut self, ident: &Ident) -> bool {
+        let ident = self.ident.take_ident(ident);
+
+        if KEYWORDS.contains(&ident) {
+            self.push_str(ident);
+            return true;
+        }
+
+        false
+    }
+
+    fn parse_cte(&mut self, input: ParseStream, out: &mut TokenStream2, table: &Ident) -> syn::Result<()> {
+        let inner;
+        syn::parenthesized!(inner in input);
+
+        self.cte = Some(table.clone());
+        self.push_str("(");
+        self.depth += 1;
+        self.parse(&inner, &mut 0)?.to_tokens(out);
+        self.depth -= 1;
+        self.push_str(")");
+        self.cte = None;
+
+        Ok(())
+    }
+
+    fn format_column_list(
+        &mut self,
+        out: &mut TokenStream2,
+        table: &Ident,
+        mut columns: Punctuated<Ident, Token![,]>,
+        naked_single: bool,
+    ) -> syn::Result<()> {
+        if let Some(trailing_comma) = columns.pop_punct() {
+            return Err(Error::new(trailing_comma.span, TRAILING_COMMA));
+        }
+
+        let wrap = columns.len() > 1 || !naked_single;
+
+        if wrap {
+            self.push_str("(");
+        }
+
+        if !columns.is_empty() {
+            self.flush(out);
+
+            let writer = &self.writer;
+            for pair in columns.pairs() {
+                out.extend(match pair {
+                    Pair::Punctuated(col, _) => quote::quote! {
+                        #writer.write_column_name(#table::#col)?;
+                        #writer.write_str(", ");
+                    },
+                    Pair::End(col) => quote::quote! { #writer.write_column_name(#table::#col)?; },
+                });
+            }
+        }
+
+        if wrap {
+            self.push_str(")");
+        }
+
+        Ok(())
+    }
+
+    fn parse_set(&mut self, input: ParseStream, out: &mut TokenStream2, table: &Ident) -> syn::Result<()> {
+        let set_token: kw::SET = input.parse()?;
+
+        let inner;
+        syn::parenthesized!(inner in input);
+
+        let columns = inner.parse_terminated(Ident::parse, Token![,])?;
+
+        self.push(set_token);
+        self.format_column_list(out, table, columns, true)
+    }
+
+    fn parse_rename(&mut self, input: ParseStream, out: &mut TokenStream2, table: &Ident) -> syn::Result<Ident> {
+        let as_token: kw::AS = input.parse()?;
+        let alias: Ident = input.parse()?;
+
+        let alias_name = self.ident(&alias).to_snake_case();
+
+        self.push(as_token);
+        self.push(LitStr::new(&alias_name, alias.span()));
+
+        out.extend(quote::quote! { type #alias = #table; });
+
+        Ok(alias)
+    }
+
+    fn parse_table_sequence(
+        &mut self,
+        input: ParseStream,
+        out: &mut TokenStream2,
+        table: &Ident,
+    ) -> syn::Result<()> {
+        // Ident() likely function call
+        if input.peek(Paren) && !input.peek2(kw::AS) {
+            self.push(table);
+            return Ok(());
+        }
+
+        self.flush(out);
+        self.write_table(out, table);
+
+        match () {
+            // Table SET ()
+            _ if input.peek(kw::SET) && input.peek2(Paren) => {
+                self.parse_set(input, out, table)?;
+            }
+
+            // Table AS Alias
+            //
+            // This adds on `AS "renamed"` and declared a type alias for other chunks
+            // of code to reference
+            _ if input.peek(kw::AS) && input.peek2(Ident) => {
+                let alias = self.parse_rename(input, out, table)?;
+
+                if input.peek(kw::SET) && input.peek2(Paren) {
+                    self.parse_set(input, out, &alias)?;
+                }
+            }
+            // Table AS ()
+            _ if input.peek(kw::AS) && input.peek2(Paren) => {
+                let as_token: kw::AS = input.parse()?;
+                self.push(as_token);
+                self.parse_cte(input, out, table)?;
+            }
+
+            // Table (Col1, Col2) AS
+            _ if input.peek(Paren) && input.peek2(kw::AS) => {
+                let inner;
+                syn::parenthesized!(inner in input);
+
+                let columns = inner.parse_terminated(Ident::parse, Token![,])?;
+
+                let as_token: kw::AS = input.parse()?;
+
+                self.format_column_list(out, table, columns, false)?;
+
+                self.push(as_token);
+
+                // we're going into a CTE, so track the current "table" during it
+                if input.peek(Paren) {
+                    self.parse_cte(input, out, table)?;
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
     fn parse_ident_sequence(&mut self, input: ParseStream, out: &mut TokenStream2) -> syn::Result<()> {
         let ident: Ident = input.parse()?;
 
         match () {
-            _ if KEYWORDS.contains(self.ident(&ident)) => self.push(ident),
-            //_ if input.peek(kw::AS) && input.peek2(Ident) => {
-            //
-            //}
+            _ if self.push_if_keyword(&ident) => {}
 
             // Table.Column
             _ if input.peek(Token![.]) && input.peek2(Ident) => {
@@ -204,6 +371,7 @@ impl State {
                 self.flush(out);
                 let writer = &self.writer;
                 out.extend(quote::quote! { #writer.write_column(#ident::#column, #table_name)?; });
+                self.push_str(""); // empty space after column name
 
                 // Table.Column AS @_
                 //
@@ -215,9 +383,10 @@ impl State {
 
                     self.assert_export_top(as_token.span)?;
 
-                    let column_name = self.ident(&column).to_snake_case();
+                    let table_name = table_name.to_upper_camel_case();
+                    let column_name = self.ident(&column).to_upper_camel_case();
 
-                    self.exports.insert(Ident::new(&format!("{table_name}_{column_name}"), at_token.span));
+                    self.exports.insert(Ident::new(&format!("{table_name}{column_name}"), at_token.span));
                 }
             }
 
@@ -228,41 +397,26 @@ impl State {
                 let column: Ident = input.parse()?;
 
                 self.flush(out);
-                let writer = &self.writer;
-                out.extend(quote::quote! { #writer.write_column_name(#ident::#column)?; });
-            }
-
-            // Ident(...), function calls, just let through unchanged,
-            // parens will be handled elsewhere
-            _ if input.peek(Paren) => {
-                self.push(ident);
+                self.write_column_name(out, &ident, &column);
             }
 
             // Table
-            _ => {
-                self.flush(out);
-                let writer = &self.writer;
-                out.extend(quote::quote! { #writer.write_table::<#ident>()?; });
-
-                // Table AS Alias
-                //
-                // This adds on `AS "renamed"` and declared a type alias for other chunks
-                // of code to reference
-                if input.peek(kw::AS) && input.peek2(Ident) {
-                    let as_token: kw::AS = input.parse()?;
-                    let alias: Ident = input.parse()?;
-
-                    let alias_name = self.ident(&alias).to_snake_case();
-
-                    self.push(as_token);
-                    self.push(LitStr::new(&alias_name, alias.span()));
-
-                    out.extend(quote::quote! { type #alias = #ident; });
-                }
-            }
+            _ => self.parse_table_sequence(input, out, &ident)?,
         }
 
         Ok(())
+    }
+
+    fn write_table(&mut self, out: &mut TokenStream2, table: &Ident) {
+        self.flush(out);
+        let writer = &self.writer;
+        out.extend(quote::quote! { #writer.write_table::<#table>()?; })
+    }
+
+    fn write_column_name(&mut self, out: &mut TokenStream2, table: &Ident, column: &Ident) {
+        self.flush(out);
+        let writer = &self.writer;
+        out.extend(quote::quote! { #writer.write_column_name(#table::#column)?; });
     }
 
     fn parse(&mut self, input: ParseStream, comma_counter: &mut usize) -> syn::Result<TokenStream2> {
@@ -270,6 +424,58 @@ impl State {
 
         while !input.is_empty() {
             match () {
+                _ if input.peek(kw::UPDATE) && input.peek2(kw::SET) => {
+                    return Err(input.error("Use `DO UPDATE TableName SET` instead."));
+                }
+
+                _ if input.peek(kw::SET) && input.peek2(Ident) => {
+                    return Err(input.error("You must use the multi-column assignment form: UPDATE Table SET (Col, Col) = (Expr, Expr)\n\nSingle columns will be formatted correctly."));
+                }
+
+                // INSERT INTO Table AS Alias (Col1, Col2)
+                _ if input.peek(kw::INTO) && input.peek2(Ident) && (input.peek3(kw::AS) || input.peek3(Paren)) => {
+                    let into_token: kw::INTO = input.parse()?;
+                    let mut table: Ident = input.parse()?;
+
+                    self.push(into_token);
+                    self.write_table(&mut out, &table);
+
+                    if input.peek(kw::AS) {
+                        if !input.peek2(Ident) {
+                            return Err(input.error("Missing alias name after AS"));
+                        }
+
+                        table = self.parse_rename(input, &mut out, &table)?;
+                    }
+
+                    let inner;
+                    syn::parenthesized!(inner in input);
+
+                    let columns = inner.parse_terminated(Ident::parse, Token![,])?;
+
+                    self.format_column_list(&mut out, &table, columns, false)?;
+                }
+
+                // DO UPDATE Table SET
+                _ if input.peek(kw::DO) && input.peek2(kw::UPDATE) && input.peek3(Ident) => {
+                    let do_token: kw::DO = input.parse()?;
+                    let update_token: kw::UPDATE = input.parse()?;
+                    let table: Ident = input.parse()?;
+                    let set_token: kw::SET = input.parse()?;
+
+                    self.push(do_token);
+                    self.push(update_token);
+                    self.push(set_token);
+
+                    let inner;
+                    syn::parenthesized!(inner in input);
+
+                    let columns = inner.parse_terminated(Ident::parse, Token![,])?;
+
+                    self.format_column_list(&mut out, &table, columns, true)?;
+                }
+
+                // exports
                 _ if input.peek(kw::AS) => {
                     let as_token: kw::AS = input.parse()?;
 
@@ -294,11 +500,16 @@ impl State {
                             let _dot: Token![.] = input.parse()?;
                             let column: Ident = input.parse()?;
 
-                            self.push(as_token);
-                            self.flush(&mut out);
+                            if let Some(ref cte) = self.cte {
+                                if *cte != table {
+                                    let mut err = Error::new(table.span(), "Conflicting CTE output column");
+                                    err.combine(Error::new(cte.span(), "Defined here"));
+                                    return Err(err);
+                                }
+                            }
 
-                            let writer = &self.writer;
-                            out.extend(quote::quote! { #writer.write_column_name(#table::#column)?; });
+                            self.push(as_token);
+                            self.write_column_name(&mut out, &table, &column);
                         }
                         _ => return Err(Error::new(as_token.span, "Unexpected AS")),
                     }
@@ -339,10 +550,6 @@ impl State {
                     out.extend(quote::quote!(;));
                 }
 
-                _ if is_macro(input) => {
-                    input.parse::<syn::Stmt>()?.to_tokens(&mut out);
-                }
-
                 _ if input.peek(Token![match]) => {
                     self.flush(&mut out);
                     parse_match(input, self)?.to_tokens(&mut out);
@@ -360,6 +567,10 @@ impl State {
                 {
                     self.flush(&mut out);
                     parse_for(input, self)?.to_tokens(&mut out, self);
+                }
+
+                _ if is_macro(input) => {
+                    input.parse::<syn::Stmt>()?.to_tokens(&mut out);
                 }
 
                 _ if input.peek(Ident) => {
@@ -381,7 +592,8 @@ impl State {
 
                     self.flush(&mut out);
                     let writer = &self.writer;
-                    out.extend(quote::quote! { #writer.param(#expr, #ty.into()); });
+                    out.extend(quote::quote! { #writer.param((#expr) as _, #ty.into())?; });
+                    self.push_str(""); // space after param
                 }
 
                 _ if input.peek(Token![@]) && input.peek2(Brace) => {
@@ -448,6 +660,7 @@ impl State {
                     self.flush(&mut out);
                     let writer = &self.writer;
                     out.extend(quote::quote! { #writer.write_literal(#expr)?; });
+                    self.push_str(""); // empty space after literal
                 }
 
                 // (...)
@@ -479,7 +692,7 @@ impl State {
                     let comma: Token![,] = input.parse()?;
 
                     if input.is_empty() || input.peek(kw::FROM) {
-                        return Err(Error::new(comma.span, "Trailing commas are not allowed in SQL"));
+                        return Err(Error::new(comma.span, TRAILING_COMMA));
                     }
 
                     self.push(comma);
