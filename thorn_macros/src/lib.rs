@@ -2,7 +2,7 @@
 
 extern crate proc_macro;
 
-use heck::{ToSnakeCase, ToUpperCamelCase};
+use heck::ToSnakeCase;
 use proc_macro::TokenStream;
 use proc_macro2::{Spacing, Span, TokenStream as TokenStream2, TokenTree};
 use quote::ToTokens;
@@ -317,6 +317,9 @@ impl State {
             //
             // This adds on `AS "renamed"` and declared a type alias for other chunks
             // of code to reference
+            //
+            // Additionally parsed
+            // Table AS Alias SET (Col)
             _ if input.peek(kw::AS) && input.peek2(Ident) => {
                 let alias = self.parse_rename(input, out, table)?;
 
@@ -375,18 +378,19 @@ impl State {
 
                 // Table.Column AS @_
                 //
-                // Combines the table name and column name for an automatic export name
+                // Combines the table name and column name for an automatic export name, and also
+                // sets an `AS "table_column"`
                 if input.peek(kw::AS) && input.peek2(Token![@]) && input.peek3(Token![_]) {
                     let as_token: kw::AS = input.parse()?;
-                    let at_token: Token![@] = input.parse()?;
-                    let _: Token![_] = input.parse()?;
+                    let _at_token: Token![@] = input.parse()?;
+                    let underscore: Token![_] = input.parse()?;
 
-                    self.assert_export_top(as_token.span)?;
+                    let name = format!("{ident}{column}");
 
-                    let table_name = table_name.to_upper_camel_case();
-                    let column_name = self.ident(&column).to_upper_camel_case();
+                    self.push(as_token);
+                    self.push(LitStr::new(&name.to_snake_case(), underscore.span));
 
-                    self.exports.insert(Ident::new(&format!("{table_name}{column_name}"), at_token.span));
+                    self.add_export(Ident::new(&name, underscore.span))?;
                 }
             }
 
@@ -419,15 +423,31 @@ impl State {
         out.extend(quote::quote! { #writer.write_column_name(#table::#column)?; });
     }
 
+    fn add_export(&mut self, name: Ident) -> syn::Result<()> {
+        let span = name.span();
+        self.assert_export_top(span)?;
+
+        if let Some(prev) = self.exports.replace(name) {
+            let mut err = Error::new(span, "Duplicate export");
+            err.combine(Error::new(prev.span(), "Previously defined here"));
+
+            return Err(err);
+        }
+
+        Ok(())
+    }
+
     fn parse(&mut self, input: ParseStream, comma_counter: &mut usize) -> syn::Result<TokenStream2> {
         let mut out = TokenStream2::new();
 
         while !input.is_empty() {
             match () {
+                // DO UPDATE SET
                 _ if input.peek(kw::UPDATE) && input.peek2(kw::SET) => {
                     return Err(input.error("Use `DO UPDATE TableName SET` instead."));
                 }
 
+                // SET Col =
                 _ if input.peek(kw::SET) && input.peek2(Ident) => {
                     return Err(input.error("You must use the multi-column assignment form: UPDATE Table SET (Col, Col) = (Expr, Expr)\n\nSingle columns will be formatted correctly."));
                 }
@@ -457,6 +477,9 @@ impl State {
                 }
 
                 // DO UPDATE Table SET
+                //
+                // NOTE: This block is required because it's not a real syntax, and the Table name should
+                // not be included
                 _ if input.peek(kw::DO) && input.peek2(kw::UPDATE) && input.peek3(Ident) => {
                     let do_token: kw::DO = input.parse()?;
                     let update_token: kw::UPDATE = input.parse()?;
@@ -482,17 +505,15 @@ impl State {
                     match () {
                         // AS @Name
                         _ if input.peek(Token![@]) && input.peek2(Ident) => {
-                            let _: Token![@] = input.parse()?;
-                            let export_name: Ident = input.parse()?;
+                            let _at_token: Token![@] = input.parse()?;
+                            let export: Ident = input.parse()?;
 
-                            self.assert_export_top(export_name.span())?;
+                            let name = self.ident(&export).to_snake_case();
 
-                            if let Some(prev) = self.exports.replace(export_name.clone()) {
-                                let mut err = Error::new(export_name.span(), "Duplicate export");
-                                err.combine(Error::new(prev.span(), "Previously defined here"));
+                            self.push(as_token);
+                            self.push(LitStr::new(&name, export.span()));
 
-                                return Err(err);
-                            }
+                            self.add_export(export)?;
                         }
                         // AS Table.Column
                         _ if input.peek(Ident) && input.peek2(Token![.]) && input.peek3(Ident) => {
