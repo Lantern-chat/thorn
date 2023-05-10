@@ -91,6 +91,7 @@ mod kw {
     syn::custom_keyword!(SET);
     syn::custom_keyword!(UPDATE);
     syn::custom_keyword!(DO);
+    syn::custom_keyword!(LATERAL);
 
     syn::custom_keyword!(join);
 }
@@ -534,6 +535,33 @@ impl State {
                         }
                         _ => return Err(Error::new(as_token.span, "Unexpected AS")),
                     }
+                }
+
+                // handling this specially avoids ambiguity with other parts
+                _ if input.peek(kw::LATERAL) && input.peek2(Paren) && input.peek3(kw::AS) => {
+                    let lateral_token: kw::LATERAL = input.parse()?;
+                    self.push(lateral_token);
+
+                    let inner;
+                    syn::parenthesized!(inner in input);
+
+                    let as_token: kw::AS = input.parse()?;
+                    let alias: Ident = input.parse()?;
+
+                    // while in the LATERAL join, check for this name instead
+                    let old_cte = std::mem::replace(&mut self.cte, Some(alias.clone()));
+
+                    // typical parenthesis
+                    self.push_str("(");
+                    self.depth += 1;
+                    self.parse(&inner, &mut 0)?.to_tokens(&mut out);
+                    self.depth -= 1;
+                    self.push_str(")");
+
+                    self.cte = old_cte;
+
+                    self.push(as_token);
+                    self.write_table(&mut out, &alias);
                 }
 
                 // .func(1, 2, 3)
