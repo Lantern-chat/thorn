@@ -26,7 +26,7 @@ fn do_parse(input: ParseStream) -> syn::Result<TokenStream2> {
         depth: 0,
     };
 
-    let mut tokens = state.parse(input, &mut 0)?;
+    let mut tokens = state.parse(input, &mut 0, false)?;
 
     // final flush, after trim
     state.buffer.truncate(state.buffer.trim_end().len());
@@ -92,6 +92,8 @@ mod kw {
     syn::custom_keyword!(UPDATE);
     syn::custom_keyword!(DO);
     syn::custom_keyword!(LATERAL);
+    syn::custom_keyword!(NOT);
+    syn::custom_keyword!(MATERIALIZED);
 
     syn::custom_keyword!(join);
 }
@@ -186,7 +188,7 @@ impl State {
 
     fn parse_nested(&mut self, input: ParseStream) -> syn::Result<TokenStream2> {
         self.depth += 1;
-        let mut res = self.parse(input, &mut 0);
+        let mut res = self.parse(input, &mut 0, true);
         if let Ok(ref mut out) = res {
             self.flush(out);
         }
@@ -214,13 +216,21 @@ impl State {
     }
 
     fn parse_cte(&mut self, input: ParseStream, out: &mut TokenStream2, table: &Ident) -> syn::Result<()> {
+        if input.peek(kw::NOT) {
+            self.push(input.parse::<kw::NOT>()?);
+        }
+
+        if input.peek(kw::MATERIALIZED) {
+            self.push(input.parse::<kw::MATERIALIZED>()?);
+        }
+
         let inner;
         syn::parenthesized!(inner in input);
 
         self.cte = Some(table.clone());
         self.push_str("(");
         self.depth += 1;
-        self.parse(&inner, &mut 0)?.to_tokens(out);
+        self.parse(&inner, &mut 0, false)?.to_tokens(out);
         self.depth -= 1;
         self.push_str(")");
         self.cte = None;
@@ -314,6 +324,17 @@ impl State {
                 self.parse_set(input, out, table)?;
             }
 
+            // Table AS [[NOT] MATERIALIZED] ()
+            _ if input.peek(kw::AS)
+                && (input.peek2(Paren)
+                    || (input.peek2(kw::NOT) && input.peek3(kw::MATERIALIZED))
+                    || input.peek2(kw::MATERIALIZED)) =>
+            {
+                let as_token: kw::AS = input.parse()?;
+                self.push(as_token);
+                self.parse_cte(input, out, table)?;
+            }
+
             // Table AS Alias
             //
             // This adds on `AS "renamed"` and declared a type alias for other chunks
@@ -327,12 +348,6 @@ impl State {
                 if input.peek(kw::SET) && input.peek2(Paren) {
                     self.parse_set(input, out, &alias)?;
                 }
-            }
-            // Table AS ()
-            _ if input.peek(kw::AS) && input.peek2(Paren) => {
-                let as_token: kw::AS = input.parse()?;
-                self.push(as_token);
-                self.parse_cte(input, out, table)?;
             }
 
             // Table (Col1, Col2) AS
@@ -349,7 +364,10 @@ impl State {
                 self.push(as_token);
 
                 // we're going into a CTE, so track the current "table" during it
-                if input.peek(Paren) {
+                if input.peek(Paren)
+                    || (input.peek(kw::NOT) && input.peek2(kw::MATERIALIZED))
+                    || input.peek(kw::MATERIALIZED)
+                {
                     self.parse_cte(input, out, table)?;
                 }
             }
@@ -438,7 +456,12 @@ impl State {
         Ok(())
     }
 
-    fn parse(&mut self, input: ParseStream, comma_counter: &mut usize) -> syn::Result<TokenStream2> {
+    fn parse(
+        &mut self,
+        input: ParseStream,
+        comma_counter: &mut usize,
+        allow_trailing: bool,
+    ) -> syn::Result<TokenStream2> {
         let mut out = TokenStream2::new();
 
         while !input.is_empty() {
@@ -554,7 +577,7 @@ impl State {
                     // typical parenthesis
                     self.push_str("(");
                     self.depth += 1;
-                    self.parse(&inner, &mut 0)?.to_tokens(&mut out);
+                    self.parse(&inner, &mut 0, false)?.to_tokens(&mut out);
                     self.depth -= 1;
                     self.push_str(")");
 
@@ -582,7 +605,7 @@ impl State {
                     // like () handling, but counts the commas in the subtree
                     self.push_str("(");
                     self.depth += 1;
-                    self.parse(&args, &mut num_commas)?.to_tokens(&mut out);
+                    self.parse(&args, &mut num_commas, false)?.to_tokens(&mut out);
                     self.depth -= 1;
                     self.push_str(")");
 
@@ -719,7 +742,7 @@ impl State {
 
                     self.push_str("(");
                     self.depth += 1;
-                    self.parse(&inner, &mut 0)?.to_tokens(&mut out);
+                    self.parse(&inner, &mut 0, false)?.to_tokens(&mut out);
                     self.depth -= 1;
                     self.push_str(")");
                 }
@@ -731,7 +754,7 @@ impl State {
 
                     self.push_str("[");
                     self.depth += 1;
-                    self.parse(&inner, &mut 0)?.to_tokens(&mut out);
+                    self.parse(&inner, &mut 0, false)?.to_tokens(&mut out);
                     self.depth -= 1;
                     self.push_str("]");
                 }
@@ -740,7 +763,7 @@ impl State {
                 _ if input.peek(Token![,]) => {
                     let comma: Token![,] = input.parse()?;
 
-                    if input.is_empty() || input.peek(kw::FROM) {
+                    if (!allow_trailing && input.is_empty()) || input.peek(kw::FROM) {
                         return Err(Error::new(comma.span, TRAILING_COMMA));
                     }
 
