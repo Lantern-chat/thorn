@@ -94,6 +94,7 @@ mod kw {
     syn::custom_keyword!(LATERAL);
     syn::custom_keyword!(NOT);
     syn::custom_keyword!(MATERIALIZED);
+    syn::custom_keyword!(JOIN);
 
     syn::custom_keyword!(join);
 }
@@ -561,9 +562,12 @@ impl State {
                 }
 
                 // handling this specially avoids ambiguity with other parts
-                _ if input.peek(kw::LATERAL) && input.peek2(Paren) && input.peek3(kw::AS) => {
-                    let lateral_token: kw::LATERAL = input.parse()?;
-                    self.push(lateral_token);
+                _ if (input.peek(kw::JOIN) || input.peek(kw::LATERAL))
+                    && input.peek2(Paren)
+                    && input.peek3(kw::AS) =>
+                {
+                    // JOIN or LATERAL
+                    self.push(input.parse::<Ident>()?);
 
                     let inner;
                     syn::parenthesized!(inner in input);
