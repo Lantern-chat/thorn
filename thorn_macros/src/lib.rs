@@ -817,6 +817,7 @@ fn is_stmt(input: ParseStream) -> bool {
         || input.peek(Token![use])
         || input.peek(Token![continue])
         || input.peek(Token![break])
+        || input.peek(Token![type])
         || is_macro(input)
     {
         return true;
