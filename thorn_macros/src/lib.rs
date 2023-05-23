@@ -259,15 +259,14 @@ impl State {
         if !columns.is_empty() {
             self.flush(out);
 
-            let writer = &self.writer;
             for pair in columns.pairs() {
-                out.extend(match pair {
-                    Pair::Punctuated(col, _) => quote::quote! {
-                        #writer.write_column_name(#table::#col)?;
-                        #writer.write_str(", ");
-                    },
-                    Pair::End(col) => quote::quote! { #writer.write_column_name(#table::#col)?; },
-                });
+                match pair {
+                    Pair::Punctuated(col, comma) => {
+                        self.write_column_name(out, table, col);
+                        self.push(comma);
+                    }
+                    Pair::End(col) => self.write_column_name(out, table, col),
+                }
             }
         }
 
