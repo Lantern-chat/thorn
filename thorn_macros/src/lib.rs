@@ -467,14 +467,14 @@ impl State {
         while !input.is_empty() {
             match () {
                 // DO UPDATE SET
-                _ if input.peek(kw::UPDATE) && input.peek2(kw::SET) => {
-                    return Err(input.error("Use `DO UPDATE TableName SET` instead."));
+                _ if input.peek(kw::UPDATE) && input.peek2(kw::SET) && input.peek3(Paren) => {
+                    return Err(input.error("Use `DO UPDATE TableName SET (col)` instead."));
                 }
 
-                // SET Col =
-                _ if input.peek(kw::SET) && input.peek2(Ident) => {
-                    return Err(input.error("You must use the multi-column assignment form: UPDATE Table SET (Col, Col) = (Expr, Expr)\n\nSingle columns will be formatted correctly."));
-                }
+                // // SET Col =
+                // _ if input.peek(kw::SET) && input.peek2(Ident) => {
+                //     return Err(input.error("You must use the multi-column assignment form: UPDATE Table SET (Col, Col) = (Expr, Expr)\n\nSingle columns will be formatted correctly."));
+                // }
 
                 // INSERT INTO Table AS Alias (Col1, Col2)
                 _ if input.peek(kw::INTO) && input.peek2(Ident) && (input.peek3(kw::AS) || input.peek3(Paren)) => {
@@ -504,7 +504,10 @@ impl State {
                 //
                 // NOTE: This block is required because it's not a real syntax, and the Table name should
                 // not be included
-                _ if input.peek(kw::DO) && input.peek2(kw::UPDATE) && input.peek3(Ident) => {
+                _ if input.peek(kw::DO)
+                    && input.peek2(kw::UPDATE)
+                    && (input.peek3(Ident) && !input.peek3(kw::SET)) =>
+                {
                     let do_token: kw::DO = input.parse()?;
                     let update_token: kw::UPDATE = input.parse()?;
                     let table: Ident = input.parse()?;
