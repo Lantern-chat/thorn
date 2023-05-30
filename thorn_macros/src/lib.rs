@@ -95,6 +95,7 @@ mod kw {
     syn::custom_keyword!(NOT);
     syn::custom_keyword!(MATERIALIZED);
     syn::custom_keyword!(JOIN);
+    syn::custom_keyword!(WHERE);
 
     syn::custom_keyword!(join);
 }
@@ -456,14 +457,13 @@ impl State {
         Ok(())
     }
 
-    fn parse(
+    fn parse_inner(
         &mut self,
         input: ParseStream,
         comma_counter: &mut usize,
         allow_trailing: bool,
-    ) -> syn::Result<TokenStream2> {
-        let mut out = TokenStream2::new();
-
+        out: &mut TokenStream2,
+    ) -> syn::Result<()> {
         while !input.is_empty() {
             match () {
                 // DO UPDATE SET
@@ -482,14 +482,14 @@ impl State {
                     let mut table: Ident = input.parse()?;
 
                     self.push(into_token);
-                    self.write_table(&mut out, &table);
+                    self.write_table(out, &table);
 
                     if input.peek(kw::AS) {
                         if !input.peek2(Ident) {
                             return Err(input.error("Missing alias name after AS"));
                         }
 
-                        table = self.parse_rename(input, &mut out, &table)?;
+                        table = self.parse_rename(input, out, &table)?;
                     }
 
                     let inner;
@@ -497,7 +497,7 @@ impl State {
 
                     let columns = inner.parse_terminated(Ident::parse, Token![,])?;
 
-                    self.format_column_list(&mut out, &table, columns, false)?;
+                    self.format_column_list(out, &table, columns, false)?;
                 }
 
                 // DO UPDATE Table SET
@@ -522,7 +522,7 @@ impl State {
 
                     let columns = inner.parse_terminated(Ident::parse, Token![,])?;
 
-                    self.format_column_list(&mut out, &table, columns, true)?;
+                    self.format_column_list(out, &table, columns, true)?;
                 }
 
                 // exports
@@ -557,7 +557,7 @@ impl State {
                             }
 
                             self.push(as_token);
-                            self.write_column_name(&mut out, &table, &column);
+                            self.write_column_name(out, &table, &column);
                         }
                         _ => return Err(Error::new(as_token.span, "Unexpected AS")),
                     }
@@ -583,14 +583,14 @@ impl State {
                     // typical parenthesis
                     self.push_str("(");
                     self.depth += 1;
-                    self.parse(&inner, &mut 0, false)?.to_tokens(&mut out);
+                    self.parse(&inner, &mut 0, false)?.to_tokens(out);
                     self.depth -= 1;
                     self.push_str(")");
 
                     self.cte = old_cte;
 
                     self.push(as_token);
-                    self.write_table(&mut out, &alias);
+                    self.write_table(out, &alias);
                 }
 
                 // .func(1, 2, 3)
@@ -604,14 +604,14 @@ impl State {
                     let has_args = !args.is_empty();
                     let mut num_commas = 0;
 
-                    self.flush(&mut out);
+                    self.flush(out);
                     let writer = &self.writer;
                     out.extend(quote::quote! { #writer.write_func::<#ident>(); });
 
                     // like () handling, but counts the commas in the subtree
                     self.push_str("(");
                     self.depth += 1;
-                    self.parse(&args, &mut num_commas, false)?.to_tokens(&mut out);
+                    self.parse(&args, &mut num_commas, false)?.to_tokens(out);
                     self.depth -= 1;
                     self.push_str(")");
 
@@ -620,7 +620,7 @@ impl State {
 
                     // <func>::func((), (), ()) but with correct span for parenthesis
                     out.extend(quote::quote!(<#ident>::#ident));
-                    parens.surround(&mut out, |tokens| {
+                    parens.surround(out, |tokens| {
                         let empty = quote::quote!(());
                         let empties = (0..num_commas).map(|_| &empty);
                         tokens.extend(quote::quote!(#(#empties,)*));
@@ -629,13 +629,13 @@ impl State {
                 }
 
                 _ if input.peek(Token![match]) => {
-                    self.flush(&mut out);
-                    parse_match(input, self)?.to_tokens(&mut out);
+                    self.flush(out);
+                    parse_match(input, self)?.to_tokens(out);
                 }
 
                 _ if input.peek(Token![if]) => {
-                    self.flush(&mut out);
-                    parse_if(input, self)?.to_tokens(&mut out);
+                    self.flush(out);
+                    parse_if(input, self)?.to_tokens(out);
                 }
 
                 _ if (input.peek(Token![for]) || input.peek(kw::join))
@@ -643,16 +643,16 @@ impl State {
                         && input.peek2(Token![:])
                         && (input.peek3(Token![for]) || input.peek3(kw::join))) =>
                 {
-                    self.flush(&mut out);
-                    parse_for(input, self)?.to_tokens(&mut out, self);
+                    self.flush(out);
+                    parse_for(input, self)?.to_tokens(out, self);
                 }
 
                 _ if is_macro(input) => {
-                    input.parse::<syn::Stmt>()?.to_tokens(&mut out);
+                    input.parse::<syn::Stmt>()?.to_tokens(out);
                 }
 
                 _ if input.peek(Ident) => {
-                    self.parse_ident_sequence(input, &mut out)?;
+                    self.parse_ident_sequence(input, out)?;
                 }
 
                 // SQL literals
@@ -668,7 +668,7 @@ impl State {
                     syn::braced!(inner in input);
                     let syn::ExprCast { expr, ty, .. } = inner.parse::<syn::ExprCast>()?;
 
-                    self.flush(&mut out);
+                    self.flush(out);
                     let writer = &self.writer;
                     out.extend(quote::quote! { #writer.param((#expr) as _, #ty.into())?; });
                     self.push_str(""); // space after param
@@ -678,7 +678,7 @@ impl State {
                     let _at_token: Token![@] = input.parse()?;
                     let block: syn::Block = input.parse()?;
 
-                    self.flush(&mut out);
+                    self.flush(out);
                     let writer = &self.writer;
                     out.extend(quote::quote! { write!(#writer, "{}", #block)?; });
                 }
@@ -686,7 +686,7 @@ impl State {
                 // arbitrary Rust expressions ${x += 1;}
                 _ if input.peek(Token![$]) && input.peek2(Brace) => {
                     let _bang: Token![$] = input.parse()?;
-                    input.parse::<syn::Block>()?.to_tokens(&mut out);
+                    input.parse::<syn::Block>()?.to_tokens(out);
                 }
 
                 // SQL type casting
@@ -706,7 +706,7 @@ impl State {
 
                         let ty_ident = Ident::new(&ty, ident.span());
 
-                        self.flush(&mut out);
+                        self.flush(out);
                         let writer = &self.writer;
                         out.extend(quote::quote! { #writer.write_str(pg::Type::#ty_ident.name()); });
 
@@ -715,7 +715,7 @@ impl State {
                     } else if input.peek(Brace) {
                         let block: syn::Block = input.parse()?;
 
-                        self.flush(&mut out);
+                        self.flush(out);
                         let writer = &self.writer;
                         out.extend(quote::quote! { write!(#writer, "{} ", pg::Type::from(#block))?; });
                     }
@@ -723,7 +723,7 @@ impl State {
 
                 // statements
                 _ if is_stmt(input) => {
-                    input.parse::<syn::Stmt>()?.to_tokens(&mut out);
+                    input.parse::<syn::Stmt>()?.to_tokens(out);
                 }
 
                 // deny other Rust keywords, if they aren't part of built-in syntax or arbitrary statements
@@ -735,7 +735,7 @@ impl State {
                 _ if input.peek(Brace) => {
                     let expr = input.parse::<syn::Block>()?;
 
-                    self.flush(&mut out);
+                    self.flush(out);
                     let writer = &self.writer;
                     out.extend(quote::quote! { #writer.write_literal(#expr)?; });
                     self.push_str(""); // empty space after literal
@@ -748,7 +748,7 @@ impl State {
 
                     self.push_str("(");
                     self.depth += 1;
-                    self.parse(&inner, &mut 0, false)?.to_tokens(&mut out);
+                    self.parse(&inner, &mut 0, false)?.to_tokens(out);
                     self.depth -= 1;
                     self.push_str(")");
                 }
@@ -760,7 +760,7 @@ impl State {
 
                     self.push_str("[");
                     self.depth += 1;
-                    self.parse(&inner, &mut 0, false)?.to_tokens(&mut out);
+                    self.parse(&inner, &mut 0, false)?.to_tokens(out);
                     self.depth -= 1;
                     self.push_str("]");
                 }
@@ -769,7 +769,7 @@ impl State {
                 _ if input.peek(Token![,]) => {
                     let comma: Token![,] = input.parse()?;
 
-                    if (!allow_trailing && input.is_empty()) || input.peek(kw::FROM) {
+                    if (!allow_trailing && input.is_empty()) || (input.peek(kw::FROM) || input.peek(kw::WHERE)) {
                         return Err(Error::new(comma.span, TRAILING_COMMA));
                     }
 
@@ -789,7 +789,24 @@ impl State {
             }
         }
 
-        Ok(out)
+        Ok(())
+    }
+
+    fn parse(
+        &mut self,
+        input: ParseStream,
+        comma_counter: &mut usize,
+        allow_trailing: bool,
+    ) -> syn::Result<TokenStream2> {
+        let mut out = TokenStream2::new();
+
+        let mut res = Ok(());
+
+        syn::token::Brace::default().surround(&mut out, |out| {
+            res = self.parse_inner(input, comma_counter, allow_trailing, out);
+        });
+
+        res.map(|_| out)
     }
 }
 
