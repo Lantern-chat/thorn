@@ -1,4 +1,4 @@
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum SqlFormatError {
     #[error(transparent)]
     FmtError(#[from] std::fmt::Error),
@@ -15,8 +15,8 @@ use std::marker::PhantomData;
 
 pub struct Query<'a, E: From<pgt::Row>> {
     pub q: String,
-    pub params: SmallVec<[&'a (dyn pg::ToSql + Sync + 'a); 16]>,
-    pub param_tys: SmallVec<[pg::Type; 16]>,
+    pub params: SmallVec<[&'a (dyn pg::ToSql + Sync + 'a); 2]>,
+    pub param_tys: SmallVec<[pg::Type; 2]>,
     e: PhantomData<E>,
 }
 
