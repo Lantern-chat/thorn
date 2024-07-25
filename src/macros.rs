@@ -10,13 +10,12 @@ pub enum SqlFormatError {
     ConflictingParameterType(usize, pg::Type, pg::Type),
 }
 
-use smallvec::SmallVec;
 use std::marker::PhantomData;
 
 pub struct Query<'a, E: From<pgt::Row>> {
     pub q: String,
-    pub params: SmallVec<[&'a (dyn pg::ToSql + Sync + 'a); 2]>,
-    pub param_tys: SmallVec<[pg::Type; 2]>,
+    pub params: Vec<&'a (dyn pg::ToSql + Sync + 'a)>,
+    pub param_tys: Vec<pg::Type>,
     e: PhantomData<E>,
 }
 
