@@ -15,10 +15,11 @@ pub fn __isql2(input: TokenStream) -> TokenStream {
 }
 
 fn do_parse(input: ParseStream) -> syn::Result<TokenStream2> {
-    let writer = input.parse()?;
+    let krate: Ident = input.parse()?;
+    let writer = Ident::new("__thorn_query", Span::call_site());
 
     let mut state = State {
-        writer,
+        writer: writer.clone(),
         ident: Default::default(),
         buffer: Default::default(),
         exports: Default::default(),
@@ -29,6 +30,15 @@ fn do_parse(input: ParseStream) -> syn::Result<TokenStream2> {
     };
 
     let mut tokens = state.parse(input, &mut 0, false)?;
+
+    let dynamic = state.dynamic;
+    tokens.extend(quote::quote! {
+        impl Columns {
+            pub const IS_DYNAMIC: bool = #dynamic;
+        }
+    });
+
+    //println!("{}", tokens.to_string());
 
     // final flush, after trim
     state.buffer.truncate(state.buffer.trim_end().len());
@@ -68,6 +78,36 @@ fn do_parse(input: ParseStream) -> syn::Result<TokenStream2> {
                 #(#accessors)*
             }
         });
+    }
+
+    let writer_ty = quote::quote! { #krate::macros::Query::<Columns> };
+
+    if state.dynamic {
+        tokens = quote::quote! {
+            let mut #writer = #writer_ty::default();
+
+            #tokens
+
+            return Ok(#writer);
+        };
+    } else {
+        let params = state.params.iter().map(|(v, _)| v);
+
+        tokens = quote::quote! {
+            static __QUERY: std::sync::OnceLock<Result<#krate::macros::StaticQuery<Columns>, #krate::macros::SqlFormatError>>
+                = std::sync::OnceLock::new();
+
+            return match __QUERY.get_or_init(|| {
+                let mut #writer = #writer_ty::default();
+
+                #tokens
+
+                Ok(#writer.into())
+            }) {
+                Err(e) => Err(e.clone()),
+                Ok(q) => Ok(#writer_ty::__from_cached(q, vec![#(#params),*])),
+            };
+        }
     }
 
     Ok(tokens)
@@ -671,6 +711,24 @@ impl State {
                     input.parse::<syn::Stmt>()?.to_tokens(out);
                 }
 
+                _ if input.peek(Token![const]) && input.peek2(Brace) => {
+                    let block = input.parse::<syn::PatConst>()?;
+
+                    self.flush(out);
+                    let writer = &self.writer;
+                    out.extend(quote::quote! { #writer.write_literal(#block)?; });
+                    self.push_str(""); // empty space after literal
+                }
+
+                // arbitrary const rust blocks
+                _ if input.peek(Token![const]) && input.peek2(Token![$]) && input.peek3(Brace) => {
+                    let const_ = input.parse::<Token![const]>()?;
+                    let _bang: Token![$] = input.parse()?;
+
+                    const_.to_tokens(out);
+                    input.parse::<syn::Block>()?.to_tokens(out);
+                }
+
                 _ if input.peek(Ident) => {
                     self.parse_ident_sequence(input, out)?;
                 }
@@ -760,6 +818,8 @@ impl State {
                     let writer = &self.writer;
                     out.extend(quote::quote! { #writer.write_literal(#expr)?; });
                     self.push_str(""); // empty space after literal
+
+                    self.dynamic = true;
                 }
 
                 // (...)

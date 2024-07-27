@@ -12,20 +12,48 @@ pub enum SqlFormatError {
 
 use std::marker::PhantomData;
 
-pub struct Query<'a, E: From<pgt::Row>> {
+pub trait RowColumns: std::any::Any + From<pgt::Row> {}
+
+impl<T> RowColumns for T where T: std::any::Any + From<pgt::Row> {}
+
+pub struct Query<'a, E: RowColumns> {
+    /// The query string
     pub q: String,
-    pub params: Vec<&'a (dyn pg::ToSql + Sync + 'a)>,
+
+    /// The types of the parameters
     pub param_tys: Vec<pg::Type>,
+
+    /// The parameters to the query
+    pub params: Vec<&'a (dyn pg::ToSql + Sync + 'a)>,
+
+    /// Reference to a cached static query
+    pub cached: Option<&'static StaticQuery<E>>,
+}
+
+#[doc(hidden)]
+pub struct StaticQuery<E: RowColumns> {
+    pub q: String,
+    pub params: Vec<pg::Type>,
     e: PhantomData<E>,
 }
 
-impl<E: From<pgt::Row>> Default for Query<'_, E> {
+impl<E: RowColumns> From<Query<'_, E>> for StaticQuery<E> {
+    fn from(q: Query<'_, E>) -> Self {
+        StaticQuery {
+            q: q.q,
+            params: q.param_tys,
+            e: PhantomData,
+        }
+    }
+}
+
+impl<E: RowColumns> Default for Query<'_, E> {
     fn default() -> Self {
         Query {
             q: String::with_capacity(128),
             params: Default::default(),
             param_tys: Default::default(),
-            e: std::marker::PhantomData,
+            cached: None,
         }
     }
 }
@@ -43,7 +71,7 @@ use std::{
 use crate::literal::write_escaped_string_quoted;
 
 #[allow(clippy::single_char_add_str)]
-impl<E: From<pgt::Row>> Write for Query<'_, E> {
+impl<E: RowColumns> Write for Query<'_, E> {
     #[inline(always)]
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.q.push_str(s);
@@ -67,16 +95,27 @@ impl<E: From<pgt::Row>> Write for Query<'_, E> {
 }
 
 #[allow(clippy::single_char_add_str)]
-impl<'a, E: From<pgt::Row>> Query<'a, E> {
+impl<'a, E: RowColumns> Query<'a, E> {
     pub fn inner(&mut self) -> &mut String {
         &mut self.q
+    }
+
+    #[doc(hidden)]
+    pub fn __from_cached(cached: &'static StaticQuery<E>, params: Vec<&'a (dyn pg::ToSql + Sync)>) -> Self {
+        Query {
+            params,
+            cached: Some(cached),
+
+            // these two don't need to allocate
+            q: String::new(),
+            param_tys: Vec::new(),
+        }
     }
 
     pub fn param(&mut self, value: &'a (dyn pg::ToSql + Sync), ty: pg::Type) -> Result<(), SqlFormatError> {
         //if self.params.
         let idx = if let Some(idx) = self.params.iter().position(|&p| {
             // SAFETY: Worst-case parameter duplication, best-case using codegen-units=1 no issues at all
-            #[allow(clippy::vtable_address_comparisons)]
             std::ptr::eq(
                 p as *const (dyn pg::ToSql + Sync),
                 value as *const (dyn pg::ToSql + Sync),
@@ -184,9 +223,7 @@ macro_rules! sql {
                 }
             }
 
-            let mut __thorn_query = $crate::macros::Query::<Columns>::default();
-            $crate::thorn_macros::__isql2!(__thorn_query $($tt)*);
-            Ok(__thorn_query)
+            $crate::thorn_macros::__isql2!($crate $($tt)*);
         }())
     }};
 }
@@ -221,6 +258,7 @@ mod tests {
         };
 
         // random hodgepodge of symbols to test the macro
+        #[allow(clippy::let_and_return)]
         let res = sql! {
             WITH AnonTable (Other) AS (
                 SELECT TestTable.SomeCol::{let ty = Type::BIT_ARRAY; ty} AS AnonTable.Other FROM TestTable

@@ -2,7 +2,7 @@ use futures_util::{Stream, StreamExt};
 use pg::ToSql;
 use pgt::{Client, Row, RowStream};
 
-use crate::macros::{Query, SqlFormatError};
+use crate::macros::{Query, RowColumns, SqlFormatError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -15,12 +15,12 @@ pub enum Error {
 
 #[allow(async_fn_in_trait)]
 pub trait ClientExt {
-    async fn query_stream2<'a, E: From<Row>>(
+    async fn query_stream2<'a, E: RowColumns + Send + Sync + 'static>(
         &self,
         query: Result<Query<'a, E>, SqlFormatError>,
     ) -> Result<impl Stream<Item = Result<E, Error>>, Error>;
 
-    async fn query2<'a, E: From<Row>>(
+    async fn query2<'a, E: RowColumns + Send + Sync + 'static>(
         &self,
         query: Result<Query<'a, E>, SqlFormatError>,
     ) -> Result<Vec<E>, Error> {
@@ -35,7 +35,7 @@ pub trait ClientExt {
 }
 
 impl ClientExt for Client {
-    async fn query_stream2<'a, E: From<Row>>(
+    async fn query_stream2<'a, E: RowColumns + Send + Sync + 'static>(
         &self,
         query: Result<Query<'a, E>, SqlFormatError>,
     ) -> Result<impl Stream<Item = Result<E, Error>>, Error> {

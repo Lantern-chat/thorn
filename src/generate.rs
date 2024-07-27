@@ -107,6 +107,8 @@ use crate::{table::SchemaColumns, *};
 pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<String, Error> {
     #[rustfmt::skip]
     let columns_rows = client.query2(sql! {
+        const ${ assert!(!Columns::IS_DYNAMIC); }
+
         SELECT
             SchemaColumns.TableName AS @TableName,
             SchemaColumns.ColumnName AS @ColumnName,
@@ -134,6 +136,8 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
     #[rustfmt::skip]
     let enums_rows = client.query2(sql! {
+        const ${ assert!(!Columns::IS_DYNAMIC); }
+
         SELECT
             PgEnum.Oid AS @Oid,
             PgType.Typname AS @Typname,
@@ -141,13 +145,17 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
             PgEnum.Enumsortorder AS @Enumsortorder,
             pg_catalog.obj_description(PgType.Oid) AS @Description
         FROM PgEnum
-        INNER JOIN PgType ON PgType.Oid = PgEnum.Enumtypid
-        LEFT JOIN PgNamespace ON PgNamespace.Oid = PgType.Typnamespace
+            INNER JOIN PgType ON PgType.Oid = PgEnum.Enumtypid
+            LEFT JOIN PgNamespace ON PgNamespace.Oid = PgType.Typnamespace
         WHERE PgNamespace.Nspname = #{&schema as PgNamespace::Nspname}
     }).await?;
 
     #[rustfmt::skip]
     let procs_rows = client.query2(sql! {
+        const ${ assert!(!Columns::IS_DYNAMIC); }
+
+        assert_eq!(Type::TRIGGER.oid(), 2279);
+
         SELECT
             PgProc.Proname AS @Proname,
             PgProc.Proargnames AS @Proargnames,
@@ -158,7 +166,7 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
         LEFT JOIN PgDescription ON PgDescription.Objoid = PgProc.Oid
         WHERE PgNamespace.Nspname = #{&schema as PgNamespace::Nspname}
             AND PgProc.Provariadic = 0
-            AND PgProc.Prorettype != {Type::TRIGGER.oid() as i32}
+            AND PgProc.Prorettype != const { 2279i32 }
     }).await?;
 
     let mut tables = HashMap::new();
