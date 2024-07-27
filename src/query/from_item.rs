@@ -15,6 +15,7 @@ const _: Option<&dyn FromItem> = None;
 
 pub trait FromItem: Collectable {}
 
+#[derive(Default)]
 pub struct TableRef<T>(PhantomData<T>);
 
 impl<T> TableRef<T> {

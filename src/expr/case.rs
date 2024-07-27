@@ -17,13 +17,15 @@ impl Case {
         Self::default().when(cond, on_true).otherwise(on_false)
     }
 
+    #[allow(clippy::self_named_constructors)]
     pub fn case<E>(expr: E) -> Self
     where
         E: ValueExpr + 'static,
     {
-        let mut case = Self::default();
-        case.expr = Some(Box::new(expr));
-        case
+        Case {
+            expr: Some(Box::new(expr)),
+            ..Default::default()
+        }
     }
 
     pub fn when<C, V>(mut self, equals: C, then: V) -> Self
