@@ -115,11 +115,7 @@ impl<T: Table> InsertQuery<T> {
         self
     }
 
-    pub fn on_conflict<C>(
-        mut self,
-        cols: impl IntoIterator<Item = C>,
-        action: impl Into<ConflictAction>,
-    ) -> Self
+    pub fn on_conflict<C>(mut self, cols: impl IntoIterator<Item = C>, action: impl Into<ConflictAction>) -> Self
     where
         C: Column + 'static,
     {
@@ -150,12 +146,7 @@ impl<T: Table> InsertQuery<T> {
     where
         E: Expr + 'static,
     {
-        self.conflict_target = Conflict::Expr(
-            targets
-                .into_iter()
-                .map(|e| Box::new(e) as Box<dyn Expr>)
-                .collect(),
-        );
+        self.conflict_target = Conflict::Expr(targets.into_iter().map(|e| Box::new(e) as Box<dyn Expr>).collect());
         self.conflict_action = Some(action.into());
         self
     }

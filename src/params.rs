@@ -1,9 +1,11 @@
 use postgres_types::ToSql;
 
 pub trait Parameters {
-    type LEN: for<'a> ga::ArrayLength<&'a (dyn ToSql + Sync)>;
+    type LEN: ga::ArrayLength;
 
-    fn as_params<'a>(&'a self) -> ga::GenericArray<&'a (dyn ToSql + Sync), Self::LEN>;
+    fn as_params(&self) -> ga::GenericArray<&(dyn ToSql + Sync), Self::LEN>;
+
+    fn all_vars() -> ga::GenericArray<crate::Var, Self::LEN>;
 }
 
 impl<T> Parameters for &T
@@ -13,8 +15,13 @@ where
     type LEN = <T as Parameters>::LEN;
 
     #[inline]
-    fn as_params<'a>(&'a self) -> ga::GenericArray<&'a (dyn ToSql + Sync), Self::LEN> {
+    fn as_params(&self) -> ga::GenericArray<&(dyn ToSql + Sync), Self::LEN> {
         <T as Parameters>::as_params(*self)
+    }
+
+    #[inline]
+    fn all_vars() -> ga::GenericArray<crate::Var, Self::LEN> {
+        <T as Parameters>::all_vars()
     }
 }
 
@@ -59,12 +66,12 @@ macro_rules! params {
             type LEN = $crate::params!(@COUNT $($field_name)*);
 
             #[allow(non_snake_case)]
-            fn as_params<'__PARAMETERS_LIFETIME>(&'__PARAMETERS_LIFETIME self) ->
-                $crate::ga::GenericArray<&'__PARAMETERS_LIFETIME (dyn $crate::pg::ToSql + Sync), Self::LEN>
-            {
-                $crate::ga::GenericArray::from([
-                    $(&self.$field_name as _),*
-                ])
+            fn as_params(&self) -> $crate::ga::GenericArray<&(dyn $crate::pg::ToSql + Sync), Self::LEN> {
+                $crate::ga::GenericArray::from([$(&self.$field_name as _),*])
+            }
+
+            fn all_vars() -> $crate::ga::GenericArray<$crate::Var, Self::LEN> {
+                $crate::ga::GenericArray::from([$(Self::$field_name()),*])
             }
         }
 

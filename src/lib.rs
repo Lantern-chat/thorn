@@ -1,5 +1,5 @@
 #![recursion_limit = "256"]
-#![allow(unused_imports, clippy::wrong_self_convention)]
+#![allow(unused, dead_code, clippy::wrong_self_convention)]
 
 pub extern crate postgres_types as pg;
 pub extern crate thorn_macros;
@@ -20,6 +20,9 @@ pub mod name;
 pub mod params;
 pub mod query;
 pub mod ty;
+
+#[cfg(feature = "extensions")]
+pub mod extensions;
 
 #[cfg(feature = "generate")]
 pub mod generate;
@@ -110,9 +113,7 @@ mod test {
 
         let s = Query::with()
             .with(Temp::as_query(
-                Query::select()
-                    .expr(1.lit().alias_to(Temp::_Id))
-                    .not_materialized(),
+                Query::select().expr(1.lit().alias_to(Temp::_Id)).not_materialized(),
             ))
             .update()
             .only()
@@ -153,9 +154,7 @@ mod test {
                 .returning(Users::Id)
                 .on_conflict(
                     [Users::Id],
-                    DoUpdate
-                        .set(Users::UserName, "test".lit())
-                        .and_where(true.lit().is_not_null()),
+                    DoUpdate.set(Users::UserName, "test".lit()).and_where(true.lit().is_not_null()),
                 )
         };
 
@@ -180,9 +179,7 @@ mod test {
                     .left_join_table::<Users>()
                     .on(true.lit())
                     .left_join(Lateral(Temp::as_query(
-                        Query::select()
-                            .expr(Users::Id.alias_to(Temp::Id))
-                            .from_table::<Users>(),
+                        Query::select().expr(Users::Id.alias_to(Temp::Id)).from_table::<Users>(),
                     )))
                     .on(true.lit()),
             )
@@ -213,11 +210,9 @@ mod test {
                     .not_materialized(),
             ))
             .with(Temp2::as_query(
-                Query::select().expr(Users::Id.alias_to(Temp2::_Id)).expr(
-                    Builtin::row_number(())
-                        .over(Users::Id.ascending())
-                        .alias_to(Temp2::RowNumber),
-                ),
+                Query::select()
+                    .expr(Users::Id.alias_to(Temp2::_Id))
+                    .expr(Builtin::row_number(()).over(Users::Id.ascending()).alias_to(Temp2::RowNumber)),
             ))
             .select()
             .distinct()
@@ -239,11 +234,7 @@ mod test {
             )
             .from(TestTable::left_join_table::<Users>().on(TestTable::UserName.equals(Users::UserName)))
             .and_where(Users::Id.equals(Var::of(Type::INT8)))
-            .and_where(
-                Users::UserName
-                    .equals(Var::of(Users::UserName))
-                    .or(Users::UserName.like("%Test%")),
-            )
+            .and_where(Users::UserName.equals(Var::of(Users::UserName)).or(Users::UserName.like("%Test%")))
             .and_where(Users::Id.less_than(Builtin::OctetLength.arg(Users::Id)))
             .limit_n(10)
             .offset_n(1)
@@ -251,13 +242,7 @@ mod test {
             .order_by(TestTable::UserName.descending())
             .and_where(Users::UserName.like("%Test%"))
             .and_where(Query::select().expr(Var::of(Type::TEXT)).exists())
-            .and_where(
-                Query::select()
-                    .col(Users::Id)
-                    .from_table::<Users>()
-                    .any()
-                    .less_than(Var::of(Type::INT4)),
-            )
+            .and_where(Query::select().col(Users::Id).from_table::<Users>().any().less_than(Var::of(Type::INT4)))
             .union_all(
                 Query::select()
                     .exprs(std::iter::repeat(1.lit()).take(8)) // must match length of other queries

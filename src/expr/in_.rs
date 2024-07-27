@@ -15,10 +15,7 @@ pub trait InExt: ValueExpr + Sized {
     {
         InExpr {
             value: self,
-            exprs: values
-                .into_iter()
-                .map(|v| Box::new(v) as Box<dyn ValueExpr>)
-                .collect(),
+            exprs: values.into_iter().map(|v| Box::new(v) as Box<dyn ValueExpr>).collect(),
             not: false,
         }
     }
@@ -29,10 +26,7 @@ pub trait InExt: ValueExpr + Sized {
     {
         InExpr {
             value: self,
-            exprs: values
-                .into_iter()
-                .map(|v| Box::new(v) as Box<dyn ValueExpr>)
-                .collect(),
+            exprs: values.into_iter().map(|v| Box::new(v) as Box<dyn ValueExpr>).collect(),
             not: true,
         }
     }

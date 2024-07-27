@@ -31,24 +31,15 @@ impl WithQuery {
     where
         Q: WithableQuery + 'static,
     {
-        self.queries
-            .insert(T::NAME.name(), (query.exclude, Box::new(query)));
+        self.queries.insert(T::NAME.name(), (query.exclude, Box::new(query)));
         self
     }
 
-    pub(crate) fn froms<'a>(&'a self) -> impl Iterator<Item = &'static str> + 'a {
-        self.queries
-            .iter()
-            .filter_map(|(k, v)| (!v.0).then(|| k))
-            .cloned()
+    pub(crate) fn froms(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.queries.iter().filter(|&(k, v)| (!v.0)).map(|(k, v)| k).cloned()
     }
 
-    pub(crate) fn collect_froms(
-        &self,
-        from_prefix: bool,
-        w: &mut dyn Write,
-        _t: &mut Collector,
-    ) -> fmt::Result {
+    pub(crate) fn collect_froms(&self, from_prefix: bool, w: &mut dyn Write, _t: &mut Collector) -> fmt::Result {
         let mut froms = self.froms();
         if let Some(from) = froms.next() {
             if from_prefix {

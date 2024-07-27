@@ -1,4 +1,5 @@
 use heck::*;
+use name::Schema;
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -6,6 +7,8 @@ use std::fmt::{self, Write};
 
 use pg::{Oid, Type};
 use pgt::Error as PgError;
+
+use crate::extensions::{ClientExt, Error as ExtError};
 
 crate::tables! {
     struct PgAttribute {
@@ -57,6 +60,9 @@ pub enum Error {
 
     #[error(transparent)]
     Fmt(#[from] std::fmt::Error),
+
+    #[error(transparent)]
+    Ext(#[from] ExtError),
 }
 
 struct Proc<'a> {
@@ -96,84 +102,78 @@ struct Table<'a> {
     cols: Vec<Column<'a>>,
 }
 
-use crate::{table::SchemaColumns as Columns, *};
+use crate::{table::SchemaColumns, *};
 
 pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<String, Error> {
-    let table_oid = || {
-        Call::custom("to_regclass")
-            .args(Columns::TableSchema.concat(".".lit()).concat(Columns::TableName))
-            .cast(Type::OID)
-    };
+    #[rustfmt::skip]
+    let columns_rows = client.query2(sql! {
+        SELECT
+            SchemaColumns.TableName AS @TableName,
+            SchemaColumns.ColumnName AS @ColumnName,
+            SchemaColumns.UdtName AS @UdtName,
+            SchemaColumns.OrdinalPosition AS @Position,
+            (SchemaColumns.IsNullable IS TRUE) AS @Nullable,
+            PgType.Oid AS @Oid,
 
-    let query_columns = Query::select()
-        .cols(&[
-            /*0*/ Columns::TableName,
-            /*1*/ Columns::ColumnName,
-            /*2*/ Columns::UdtName,
-            /*3*/ Columns::OrdinalPosition,
-        ])
-        // 4
-        .expr(Columns::IsNullable.cast(Type::BOOL))
-        // 5
-        .col(PgType::Oid)
-        // 6
-        .expr(Call::custom("pg_catalog.obj_description").arg(table_oid()))
-        // 7
-        .expr(
-            Call::custom("pg_catalog.col_description")
-                .arg(table_oid())
-                .arg(Columns::OrdinalPosition),
-        )
-        .from(Columns::left_join_table::<PgType>().on(PgType::Typname.equals(Columns::UdtName)))
-        .and_where(Columns::TableSchema.equals(Var::of(Columns::TableSchema)))
-        .order_by(Columns::TableName.ascending())
-        .to_string()
-        .0;
+            // pg_catalog.obj_description(to_regclass("columns"."table_schema" || '.' || "columns"."table_name")::oid)
+            pg_catalog.obj_description(PgType.Oid)::(
+                to_regclass(SchemaColumns.TableSchema || "." || SchemaColumns.TableName)::OID
+            ) AS @TableComment,
 
-    let query_enums = Query::select()
-        .from(
-            PgEnum::inner_join_table::<PgType>()
-                .on(PgType::Oid.equals(PgEnum::Enumtypid))
-                .left_join_table::<PgNamespace>()
-                .on(PgNamespace::Oid.equals(PgType::Typnamespace)),
-        )
-        .and_where(PgNamespace::Nspname.equals(Var::of(PgNamespace::Nspname)))
-        .cols(&[PgType::Oid, PgType::Typname])
-        .cols(&[PgEnum::Enumlabel, PgEnum::Enumsortorder])
-        .expr(Call::custom("pg_catalog.obj_description").arg(PgType::Oid))
-        .to_string()
-        .0;
+            // pg_catalog.col_description(to_regclass("columns"."table_schema" || '.' || "columns"."table_name")::oid, "columns"."ordinal_position")
+            pg_catalog.col_description(
+                to_regclass(SchemaColumns.TableSchema || "." || SchemaColumns.TableName)::OID,
+                SchemaColumns.OrdinalPosition
+            ) AS @ColComment
 
-    let query_procs = Query::select()
-        .from(
-            PgProc::inner_join_table::<PgNamespace>()
-                .on(PgNamespace::Oid.equals(PgProc::Pronamespace))
-                .left_join_table::<PgDescription>()
-                .on(PgDescription::Objoid.equals(PgProc::Oid)),
-        )
-        .and_where(PgNamespace::Nspname.equals(Var::of(PgNamespace::Nspname)))
-        .cols(&[PgProc::Proname, PgProc::Proargnames, PgProc::Proargtypes])
-        .col(PgDescription::Description)
-        .and_where(PgProc::Provariadic.equals(0.lit()))
-        .and_where(PgProc::Prorettype.not_equals((Type::TRIGGER.oid() as i32).lit()))
-        .to_string()
-        .0;
+        FROM SchemaColumns LEFT JOIN PgType ON PgType.Typname = SchemaColumns.UdtName
+        WHERE SchemaColumns.TableSchema = #{&schema as SchemaColumns::TableSchema}
+        ORDER BY SchemaColumns.TableName ASC
+    })
+    .await?;
 
-    let column_rows = client.query(query_columns.as_str(), &[&schema]).await?;
-    let enum_variants = client.query(query_enums.as_str(), &[&schema]).await?;
-    let proc_rows = client.query(query_procs.as_str(), &[&schema]).await?;
+    #[rustfmt::skip]
+    let enums_rows = client.query2(sql! {
+        SELECT
+            PgEnum.Oid AS @Oid,
+            PgType.Typname AS @Typname,
+            PgEnum.Enumlabel AS @Enumlabel,
+            PgEnum.Enumsortorder AS @Enumsortorder,
+            pg_catalog.obj_description(PgType.Oid) AS @Description
+        FROM PgEnum
+        INNER JOIN PgType ON PgType.Oid = PgEnum.Enumtypid
+        LEFT JOIN PgNamespace ON PgNamespace.Oid = PgType.Typnamespace
+        WHERE PgNamespace.Nspname = #{&schema as PgNamespace::Nspname}
+    }).await?;
+
+    #[rustfmt::skip]
+    let procs_rows = client.query2(sql! {
+        SELECT
+            PgProc.Proname AS @Proname,
+            PgProc.Proargnames AS @Proargnames,
+            PgProc.Proargtypes AS @Proargtypes,
+            PgDescription.Description AS @Description
+        FROM PgProc
+        INNER JOIN PgNamespace ON PgNamespace.Oid = PgProc.Pronamespace
+        LEFT JOIN PgDescription ON PgDescription.Objoid = PgProc.Oid
+        WHERE PgNamespace.Nspname = #{&schema as PgNamespace::Nspname}
+            AND PgProc.Provariadic = 0
+            AND PgProc.Prorettype != {Type::TRIGGER.oid() as i32}
+    }).await?;
 
     let mut tables = HashMap::new();
+    let mut enums = HashMap::new();
+    let mut procs = Vec::new();
 
-    for row in &column_rows {
-        let table_name: &str = row.try_get(0)?;
-        let column_name: &str = row.try_get(1)?;
-        let udt_name: &str = row.try_get(2)?;
-        let nullable: bool = row.try_get(4)?;
-        let position = row.try_get(3)?;
-        let oid = row.try_get(5)?;
-        let table_comment: Option<&str> = row.try_get(6)?;
-        let col_comment: Option<&str> = row.try_get(7)?;
+    for row in &columns_rows {
+        let table_name: &str = row.table_name()?;
+        let column_name: &str = row.column_name()?;
+        let udt_name: &str = row.udt_name()?;
+        let nullable: bool = row.nullable()?;
+        let position = row.position()?;
+        let oid = row.oid()?;
+        let table_comment: Option<&str> = row.table_comment()?;
+        let col_comment: Option<&str> = row.col_comment()?;
 
         let table = tables.entry(table_name).or_insert_with(|| Table {
             name: table_name,
@@ -191,14 +191,12 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
         });
     }
 
-    let mut enums = HashMap::new();
-
-    for row in &enum_variants {
-        let enum_oid: Oid = row.try_get(0)?;
-        let enum_name: &str = row.try_get(1)?;
-        let enum_variant: &str = row.try_get(2)?;
-        let enum_position: f32 = row.try_get(3)?;
-        let enum_comment: Option<&str> = row.try_get(4)?;
+    for row in &enums_rows {
+        let enum_oid: Oid = row.oid()?;
+        let enum_name: &str = row.typname()?;
+        let enum_variant: &str = row.enumlabel()?;
+        let enum_position: f32 = row.enumsortorder()?;
+        let enum_comment: Option<&str> = row.description()?;
 
         let enum_ = enums.entry(enum_name).or_insert_with(|| Enum {
             name: enum_name,
@@ -213,41 +211,39 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
         });
     }
 
-    let mut enums = enums.into_values().collect::<Vec<_>>();
-
-    let mut procs = Vec::new();
-    for row in &proc_rows {
-        let argnames: Option<Vec<&str>> = row.try_get(1)?;
-        let argtypes: Vec<Oid> = row.try_get(2)?;
+    for row in &procs_rows {
+        let argnames: Option<Vec<&str>> = row.proargnames()?;
+        let argtypes: Vec<Oid> = row.proargtypes()?;
 
         // actual arguments names may not be present, so fill them with "__argN" names
         let argnames = match argnames {
             Some(argnames) => argnames
                 .iter()
                 .enumerate()
-                .map(|(i, name)| {
-                    if name.is_empty() {
-                        Cow::Owned(format!("__arg{i}"))
-                    } else {
-                        Cow::Borrowed(*name)
-                    }
-                })
+                .map(
+                    |(i, name)| {
+                        if name.is_empty() {
+                            Cow::Owned(format!("__arg{i}"))
+                        } else {
+                            Cow::Borrowed(*name)
+                        }
+                    },
+                )
                 .collect(),
-            None => argtypes
-                .iter()
-                .enumerate()
-                .map(|(i, _)| Cow::Owned(format!("__arg{i}")))
-                .collect(),
+            None => argtypes.iter().enumerate().map(|(i, _)| Cow::Owned(format!("__arg{i}"))).collect(),
         };
 
         procs.push(Proc {
-            name: row.try_get(0)?,
+            name: row.proname()?,
             argnames,
             argtypes,
-            comment: row.try_get(3)?,
+            comment: row.description()?,
             rettype: 0,
         });
     }
+
+    // get enum values and ignore the keys
+    let mut enums = enums.into_values().collect::<Vec<_>>();
 
     let schema_name = schema.map(|s| s.to_upper_camel_case());
 
@@ -310,7 +306,6 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
         enums.sort_by_key(|e| e.name);
 
         let mut lazy_statics = String::new();
-        lazy_statics.push_str("lazy_static::lazy_static! {\n");
 
         out.push_str("thorn::enums! {\n");
 
@@ -325,14 +320,14 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
             writeln!(
                 lazy_statics,
-                "    /// See [{enum_name}] for full documentation\n    pub static ref {}: Type = <{enum_name} as EnumType>::ty({});",
+                "/// See [{enum_name}] for full documentation\n    pub static {}: std::sync::LazyLock<thorn::pg::Type> = std::sync::LazyLock::new(|| <{enum_name} as thorn::EnumType>::ty({}));",
                 enum_.name.to_shouty_snake_case(),
                 enum_.oid
             )?;
 
             match schema_name {
-                Some(ref name) => write!(out, "    pub enum {enum_name} in {name} {{\n")?,
-                None => write!(out, "    pub enum {enum_name} {{\n")?,
+                Some(ref name) => writeln!(out, "    pub enum {enum_name} in {name} {{")?,
+                None => writeln!(out, "    pub enum {enum_name} {{")?,
             }
 
             enum_.variants.sort_by(|a, b| a.position.total_cmp(&b.position));
@@ -345,8 +340,6 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
             out.push_str("    }\n");
         }
-
-        lazy_statics.push_str("}\n\n");
 
         out.push_str("}\n\n");
         out.push_str(&lazy_statics);
@@ -369,8 +362,8 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
             let table_name = table.name.to_upper_camel_case();
             match schema_name {
-                Some(ref name) => write!(out, "    pub struct {table_name} in {name} {{\n")?,
-                None => write!(out, "    pub struct {table_name} {{\n")?,
+                Some(ref name) => writeln!(out, "    pub struct {table_name} in {name} {{")?,
+                None => writeln!(out, "    pub struct {table_name} {{")?,
             }
 
             table.cols.sort_by_key(|c| c.position);
@@ -396,7 +389,7 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
                 }
 
                 if col.null {
-                    writeln!(out, "        {column_name}: Nullable({}),", ty)?;
+                    writeln!(out, "        {column_name}: thorn::table::Nullable({}),", ty)?;
                 } else {
                     writeln!(out, "        {column_name}: {},", ty)?;
                 }
@@ -410,8 +403,6 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
     let mut out = String::new();
 
-    out += "use thorn::{enums::EnumType, pg::Type, table::Nullable};\n\n";
-
     out += &out_funcs;
     out += &out_enums;
     out += &out_tables;
@@ -423,6 +414,6 @@ struct PType(pub Type);
 
 impl fmt::Display for PType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Type::{}", format!("{:?}", self.0).to_shouty_snake_case())
+        write!(f, "thorn::pg::Type::{}", format!("{:?}", self.0).to_shouty_snake_case())
     }
 }

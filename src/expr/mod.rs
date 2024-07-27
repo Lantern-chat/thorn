@@ -256,3 +256,18 @@ impl_tuple_expr! {
     //(A, B, C, D, E, F, G, H, I, J, K, L, M, N),
 }
 */
+
+macro_rules! forward_binary_ops {
+    (@OP $name:ident<$($generic:ident: $bound:ident),*> $op_trait:ident::$op:ident => $method:ident) => {
+        impl std::ops::$op_trait for
+    };
+
+    ($name:ident $(<$($generic:ident:$bound:ident),*>)?) => {
+        forward_binary_ops!(@OP $name<$($($generic: $bound),*)?> Add::add);
+        forward_binary_ops!(@OP $name<$($($generic: $bound),*)?> Sub::sub);
+        forward_binary_ops!(@OP $name<$($($generic: $bound),*)?> Add::add);
+        forward_binary_ops!(@OP $name<$($($generic: $bound),*)?> Add::add);
+        forward_binary_ops!(@OP $name<$($($generic: $bound),*)?> Add::add);
+        forward_binary_ops!(@OP $name<$($($generic: $bound),*)?> Add::add);
+    };
+}

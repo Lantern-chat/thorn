@@ -76,12 +76,14 @@ macro_rules! indexed_columns {
             __OFFSET
         }
 
-        #[allow(non_snake_case)]
         impl $name {
             pub const fn __offset() -> usize {
                 $name::__OFFSET as usize
             }
+        }
 
+        //#[deny(dead_code)]
+        impl $name {
             pub const fn [<$first:snake>]() -> usize {
                 Self::$first as usize
             }

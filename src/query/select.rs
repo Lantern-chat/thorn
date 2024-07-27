@@ -95,8 +95,7 @@ impl SelectQuery {
     where
         E: Expr + 'static,
     {
-        self.exprs
-            .extend(expressions.into_iter().map(|e| Box::new(e) as Box<dyn Expr>));
+        self.exprs.extend(expressions.into_iter().map(|e| Box::new(e) as Box<dyn Expr>));
         self
     }
 
@@ -283,10 +282,7 @@ impl Collectable for SelectQuery {
         if !self.orders.is_empty() {
             w.write_str(" ORDER BY ")?;
 
-            let iter = self
-                .orders
-                .iter()
-                .map(|(order, inner)| OrderExpr { order: *order, inner });
+            let iter = self.orders.iter().map(|(order, inner)| OrderExpr { order: *order, inner });
 
             collect_delimited(iter, false, ", ", w, t)?;
         }

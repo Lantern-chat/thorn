@@ -24,6 +24,8 @@ fn do_parse(input: ParseStream) -> syn::Result<TokenStream2> {
         exports: Default::default(),
         cte: None,
         depth: 0,
+        dynamic: false,
+        params: Vec::new(),
     };
 
     let mut tokens = state.parse(input, &mut 0, false)?;
@@ -127,6 +129,8 @@ struct State {
     exports: indexmap::IndexSet<Ident>,
     cte: Option<Ident>,
     depth: usize,
+    dynamic: bool,
+    params: Vec<(Box<syn::Expr>, Box<syn::Type>)>,
 }
 
 impl State {
@@ -135,7 +139,9 @@ impl State {
     }
 
     fn rewrite_spacing(&mut self) {
-        let Some(start) = self.buffer.len().checked_sub(2) else { return; };
+        let Some(start) = self.buffer.len().checked_sub(2) else {
+            return;
+        };
 
         let mut chars = self.buffer.chars().rev();
 
@@ -384,10 +390,24 @@ impl State {
         match () {
             _ if self.push_if_keyword(&ident) => {}
 
+            //_ if input.peek(Token![.]) && input.peek2(Token![*]) => {
+            //    let _dot: Token![.] = input.parse()?;
+            //    let _star: Token![*] = input.parse()?;
+            //}
+
             // Table.Column
             _ if input.peek(Token![.]) && input.peek2(Ident) => {
-                let _dot: Token![.] = input.parse()?;
+                let dot: Token![.] = input.parse()?;
                 let column: Ident = input.parse()?;
+
+                // built-in pg_* namespace, ignore until better solution
+                if ident.to_string().starts_with("pg_") {
+                    self.push(ident);
+                    self.push(dot);
+                    self.push(column);
+
+                    return Ok(());
+                }
 
                 let table_name = self.ident(&ident).to_snake_case();
 
@@ -671,6 +691,7 @@ impl State {
                     self.flush(out);
                     let writer = &self.writer;
                     out.extend(quote::quote! { #writer.param((#expr) as _, #ty.into())?; });
+                    self.params.push((expr, ty));
                     self.push_str(""); // space after param
                 }
 
@@ -897,6 +918,10 @@ fn parse_match(input: ParseStream, state: &mut State) -> syn::Result<Match> {
         arms.push(parse_arm(&content, state)?);
     }
 
+    if !arms.is_empty() {
+        state.dynamic = true;
+    }
+
     Ok(Match {
         match_token,
         expr: Box::new(expr),
@@ -985,6 +1010,8 @@ fn parse_if(input: ParseStream, state: &mut State) -> syn::Result<If> {
         None
     };
 
+    state.dynamic = true;
+
     Ok(If {
         if_token,
         cond: Box::new(cond),
@@ -1054,6 +1081,8 @@ fn parse_for(input: ParseStream, state: &mut State) -> syn::Result<For> {
     let inner;
     let brace_token = syn::braced!(inner in input);
     let body = state.parse_nested(&inner)?;
+
+    state.dynamic = true;
 
     Ok(For {
         label,

@@ -14,14 +14,17 @@ thorn_macros = { path = "./thorn_macros" }
 postgres-types = { version = "0.2", features = ["derive"] }
 paste = "1"
 thiserror = "1.0.24"
-generic-array = "0.14.5"
-indexmap = "1.9.1"
+generic-array = "1"
+indexmap = "2"
 itoa = "1"
 tokio-postgres = { version = "0.7", default-features = false }
+futures-util = { version = "0.3", default-features = false, optional = true }
 
-heck = { optional = true, version = "0.4.0" }
+heck = { optional = true, version = "0.5" }
 textwrap = { optional = true, version = "0.16.0" }
 smallvec = "1.10.0"
 
 [features]
-generate = ["heck", "textwrap", "tokio-postgres/default"]
+default = ["extensions", "generate"]
+generate = ["heck", "textwrap", "tokio-postgres/default", "extensions"]
+extensions = ["tokio-postgres/default", "futures-util"]
