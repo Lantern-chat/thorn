@@ -114,11 +114,11 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
             SchemaColumns.ColumnName AS @ColumnName,
             SchemaColumns.UdtName AS @UdtName,
             SchemaColumns.OrdinalPosition AS @Position,
-            (SchemaColumns.IsNullable IS TRUE) AS @Nullable,
+            SchemaColumns.IsNullable::BOOL AS @Nullable,
             PgType.Oid AS @Oid,
 
             // pg_catalog.obj_description(to_regclass("columns"."table_schema" || '.' || "columns"."table_name")::oid)
-            pg_catalog.obj_description(PgType.Oid)::(
+            pg_catalog.obj_description(
                 to_regclass(SchemaColumns.TableSchema || "." || SchemaColumns.TableName)::OID
             ) AS @TableComment,
 
