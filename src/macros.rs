@@ -112,29 +112,39 @@ impl<'a, E: RowColumns> Query<'a, E> {
         }
     }
 
-    pub fn param(&mut self, value: &'a (dyn pg::ToSql + Sync), ty: pg::Type) -> Result<(), SqlFormatError> {
-        //if self.params.
-        let idx = if let Some(idx) = self.params.iter().position(|&p| {
+    pub fn param<const DYNAMIC: bool>(
+        &mut self,
+        value: &'a (dyn pg::ToSql + Sync),
+        ty: pg::Type,
+    ) -> Result<(), SqlFormatError> {
+        let idx = match self.params.iter().position(|&p| {
             // SAFETY: Worst-case parameter duplication, best-case using codegen-units=1 no issues at all
             std::ptr::eq(
                 p as *const (dyn pg::ToSql + Sync),
                 value as *const (dyn pg::ToSql + Sync),
             )
         }) {
-            if ty != pg::Type::ANY {
-                let existing_ty = &self.param_tys[idx];
-                if *existing_ty == pg::Type::ANY {
-                    self.param_tys[idx] = ty;
-                } else if *existing_ty != ty {
-                    return Err(SqlFormatError::ConflictingParameterType(idx, ty, existing_ty.clone()));
+            Some(idx) if DYNAMIC => {
+                if ty != pg::Type::ANY {
+                    let existing_ty = &self.param_tys[idx];
+                    if *existing_ty == pg::Type::ANY {
+                        self.param_tys[idx] = ty;
+                    } else if *existing_ty != ty {
+                        return Err(SqlFormatError::ConflictingParameterType(idx, ty, existing_ty.clone()));
+                    }
                 }
-            }
 
-            idx + 1 // 1-indexed
-        } else {
-            self.params.push(value);
-            self.param_tys.push(ty);
-            self.params.len() // 1-indexed, take len after push
+                idx + 1 // 1-indexed
+            }
+            v => {
+                if !DYNAMIC && v.is_some() {
+                    eprintln!("Duplicate {ty} parameter at index {}", v.unwrap());
+                }
+
+                self.param_tys.push(ty);
+                self.params.push(value);
+                self.params.len() // 1-indexed, take len after push
+            }
         };
 
         self.inner().push_str("$");

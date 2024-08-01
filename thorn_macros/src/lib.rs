@@ -748,7 +748,9 @@ impl State {
 
                     self.flush(out);
                     let writer = &self.writer;
-                    out.extend(quote::quote! { #writer.param((#expr) as _, #ty.into())?; });
+                    out.extend(
+                        quote::quote! { #writer.param::<{Columns::IS_DYNAMIC}>((#expr) as _, #ty.into())?; },
+                    );
                     self.params.push((expr, ty));
                     self.push_str(""); // space after param
                 }
