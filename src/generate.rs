@@ -107,7 +107,7 @@ use crate::{table::SchemaColumns, *};
 pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<String, Error> {
     #[rustfmt::skip]
     let columns_rows = client.query2(sql! {
-        const ${ assert!(!Columns::IS_DYNAMIC); }
+        const _: () = assert!(!Columns::IS_DYNAMIC);
 
         SELECT
             SchemaColumns.TableName AS @TableName,
@@ -136,7 +136,7 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
     #[rustfmt::skip]
     let enums_rows = client.query2(sql! {
-        const ${ assert!(!Columns::IS_DYNAMIC); }
+        const _: () = assert!(!Columns::IS_DYNAMIC);
 
         SELECT
             PgEnum.Oid AS @Oid,
@@ -152,7 +152,7 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
     #[rustfmt::skip]
     let procs_rows = client.query2(sql! {
-        const ${ assert!(!Columns::IS_DYNAMIC); }
+        const _: () = assert!(!Columns::IS_DYNAMIC);
 
         assert_eq!(Type::TRIGGER.oid(), 2279);
 
