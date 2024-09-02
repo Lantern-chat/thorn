@@ -11,7 +11,7 @@ members = ["thorn_macros"]
 
 [dependencies]
 thorn_macros = { path = "./thorn_macros" }
-postgres-types = { version = "0.2", features = ["derive"] }
+postgres-types = "0.2"
 paste = "1"
 thiserror = "1.0.24"
 generic-array = "1"

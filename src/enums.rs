@@ -38,14 +38,56 @@ macro_rules! enums {
         $(     $(#[$variant_meta:meta])* $variant:ident     ),+$(,)?
     })*) => {$crate::paste::paste! {$(
         $(#[$meta])*
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, $crate::pg::ToSql, $crate::pg::FromSql)]
-        #[postgres(name = "" [<$name:snake>] "")]
-        $( #[postgres(name = $rename:snake)] )?
-        $enum_vis enum $name {$(
-            $(#[$variant_meta])*
-            #[postgres(name = "" [<$variant:snake>] "")]
-            $variant
-        ),*}
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        $enum_vis enum $name { $( $(#[$variant_meta])* $variant ),* }
+
+        const _: () = {
+            use std::error::Error;
+            use $crate::pg::{ToSql, to_sql_checked, FromSql, IsNull, Type, Kind};
+            use $crate::pg::private::BytesMut;
+            use $crate::enums::EnumType;
+
+            fn accepts(ty: &Type) -> bool {
+                if ty.name() != $name::NAME.name() {
+                    return false;
+                }
+
+                match *ty.kind() {
+                    Kind::Enum(ref variants) if variants.len() == $name::VARIANTS.len() => {
+                        variants.iter().all(|v| $name::VARIANTS.iter().any(|e| e.name() == v))
+                    }
+                    _ => false,
+                }
+            }
+
+            impl ToSql for $name {
+                fn to_sql(&self, _ty: &Type, buf: &mut BytesMut) -> std::result::Result<IsNull, Box<dyn Error + Sync + Send>> {
+                    buf.extend_from_slice(self.name().as_bytes());
+                    Ok(IsNull::No)
+                }
+
+                #[inline]
+                fn accepts(ty: &Type) -> bool {
+                    accepts(ty)
+                }
+
+                to_sql_checked!();
+            }
+
+            impl<'a> FromSql<'a> for $name {
+                fn from_sql(_ty: &Type, buf: &'a [u8]) -> Result<$name, Box<dyn Error + Sync + Send>> {
+                    match ::core::str::from_utf8(buf)? {
+                        $(stringify!([<$variant:snake>]) => Ok($name::$variant),)*
+                        s => Err(format!("Invalid variant: {s}").into())
+                    }
+                }
+
+                #[inline]
+                fn accepts(ty: &Type) -> bool {
+                    accepts(ty)
+                }
+            }
+        };
 
         impl $crate::enums::EnumType for $name {
             const SCHEMA: $crate::name::Schema = $crate::name::Schema::None
