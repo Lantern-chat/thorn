@@ -75,16 +75,17 @@ struct Proc<'a> {
 
 #[derive(Debug)]
 struct Variant<'a> {
+    oid: Oid,
     name: &'a str,
     position: f32,
 }
 
 #[derive(Debug)]
 struct Enum<'a> {
+    oid: Oid,
     name: &'a str,
     comment: Option<&'a str>,
     variants: Vec<Variant<'a>>,
-    oid: Oid,
 }
 
 struct Column<'a> {
@@ -139,7 +140,8 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
         const _: () = assert!(!Columns::IS_DYNAMIC);
 
         SELECT
-            PgEnum.Oid AS @Oid,
+            PgEnum.Enumtypid AS @Oid,
+            PgEnum.Oid AS @VariantOid,
             PgType.Typname AS @Typname,
             PgEnum.Enumlabel AS @Enumlabel,
             PgEnum.Enumsortorder AS @Enumsortorder,
@@ -166,7 +168,7 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
         LEFT JOIN PgDescription ON PgDescription.Objoid = PgProc.Oid
         WHERE PgNamespace.Nspname = #{&schema as PgNamespace::Nspname}
             AND PgProc.Provariadic = 0
-            AND PgProc.Prorettype != const { 2279i32 }
+            AND PgProc.Prorettype != const { 2279_i32 }
     }).await?;
 
     let mut tables = HashMap::new();
@@ -200,20 +202,22 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
     }
 
     for row in &enums_rows {
-        let enum_oid: Oid = row.oid()?;
+        let oid: Oid = row.oid()?;
+        let variant_oid: Oid = row.variant_oid()?;
         let enum_name: &str = row.typname()?;
         let enum_variant: &str = row.enumlabel()?;
         let enum_position: f32 = row.enumsortorder()?;
         let enum_comment: Option<&str> = row.description()?;
 
         let enum_ = enums.entry(enum_name).or_insert_with(|| Enum {
+            oid,
             name: enum_name,
             comment: enum_comment,
             variants: Vec::new(),
-            oid: enum_oid,
         });
 
         enum_.variants.push(Variant {
+            oid: variant_oid,
             name: enum_variant,
             position: enum_position,
         });
@@ -282,7 +286,7 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
                     None => match enums.iter().find(|e| e.oid == ty) {
                         Some(enum_) => Some(format!("{}.clone()", enum_.name.to_shouty_snake_case())),
                         None => {
-                            eprintln!("Cannot find type: {} for {}.{}", ty, proc.name, arg);
+                            eprintln!("Warning: Cannot find type: '{}' for '{}.{}'", ty, proc.name, arg);
                             None
                         }
                     },
@@ -382,7 +386,10 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
                     None => match enums.iter().find(|e| e.oid == col.ty) {
                         Some(enum_) => format!("{}.clone()", enum_.name.to_shouty_snake_case()),
                         None => {
-                            eprintln!("Cannot find type: {} for {}.{}", col.udt, table.name, col.name);
+                            eprintln!(
+                                "Warning: Cannot find type: '{}' for '{}.{}'",
+                                col.udt, table.name, col.name
+                            );
                             continue;
                         }
                     },
