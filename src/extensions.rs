@@ -45,7 +45,12 @@ impl ClientExt for Client {
 
         let mut query = query?;
 
-        let stmt = self.prepare_typed(&query.q, &query.param_tys).await?;
+        let (q, tys) = match query.cached {
+            Some(cached) => (&cached.q, &cached.params),
+            None => (&query.q, &query.param_tys),
+        };
+
+        let stmt = self.prepare_typed(q, tys).await?;
 
         let stream = self.query_raw(&stmt, slice_iter(&query.params)).await?;
 
