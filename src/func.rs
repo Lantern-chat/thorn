@@ -22,13 +22,6 @@ macro_rules! functions {
             #[doc(hidden)]
             #[allow(unused)]
             pub const fn $name( $( $arg: (), )* ) {}
-
-            $(#[$meta])*
-            $vis fn call($($arg: impl $crate::ValueExpr + 'static),*) -> $crate::Call {
-                use $crate::{func::Func, expr::CastExt};
-
-                $crate::Call::custom(<Self as Func>::NAME).args(($($arg$(.cast($ty))?,)*))
-            }
         }
     )*}};
 

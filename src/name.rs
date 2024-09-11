@@ -48,7 +48,7 @@ fn valid_name_start(c: char) -> bool {
 }
 
 fn valid_name_char(c: char) -> bool {
-    c.is_alphanumeric() || ['_', '$'].contains(&c)
+    c.is_alphanumeric() || c == '_' || c == '$' // ['_', '$'].contains(&c)
 }
 
 impl NameError {

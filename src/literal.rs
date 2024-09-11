@@ -1,7 +1,10 @@
-use super::*;
-
 // TODO: Create a new Literal trait with a "collect_as_literal" method, then implement
 // this trait AND Collectable/ValueExpr for all literal types (integers, strings, etc.)
+
+use std::{
+    borrow::Cow,
+    fmt::{self, Write},
+};
 
 mod private {
     pub trait Sealed {}
@@ -20,44 +23,26 @@ mod private {
 
 pub trait Literal: Sized + private::Sealed {
     #[doc(hidden)]
-    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result;
-
-    #[inline(always)]
-    fn lit(self) -> Lit<Self> {
-        Lit(self)
-    }
+    fn write_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result;
 }
 
 impl<T: Literal> Literal for &T {
     #[inline]
-    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
-        (**self).collect_literal(w, depth)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[repr(transparent)]
-pub struct Lit<L: Literal>(pub L);
-
-impl<L: Literal> Expr for Lit<L> {}
-impl<L: Literal> ValueExpr for Lit<L> {}
-impl<L: Literal> Collectable for Lit<L> {
-    fn collect(&self, w: &mut dyn Write, _t: &mut Collector) -> fmt::Result {
-        self.0.collect_literal(w, 0)
+    fn write_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
+        (**self).write_literal(w, depth)
     }
 }
 
 impl Literal for () {
     #[inline]
-    fn collect_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
+    fn write_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
         w.write_str("NULL")
     }
 }
 
-impl BooleanExpr for Lit<bool> {}
 impl Literal for bool {
     #[inline]
-    fn collect_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
+    fn write_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
         w.write_str(if *self { "TRUE" } else { "FALSE" })
     }
 }
@@ -65,7 +50,7 @@ impl Literal for bool {
 macro_rules! impl_num_lits {
     (@INT $($ty:ty),*) => {$(
         impl Literal for $ty {
-            fn collect_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
+            fn write_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
                 w.write_str(itoa::Buffer::new().format(*self))
             }
         }
@@ -73,8 +58,8 @@ macro_rules! impl_num_lits {
 
     (@FLOAT $($ty:ty),*) => {$(
         impl Literal for $ty {
-            fn collect_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
-                write!(w, "{}", *self)
+            fn write_literal(&self, w: &mut dyn Write, _depth: usize) -> fmt::Result {
+                write!(w, "{}", self)
             }
         }
     )*};
@@ -84,7 +69,7 @@ impl_num_lits!(@INT i8, i16, i32, i64);
 impl_num_lits!(@FLOAT f32, f64);
 
 impl Literal for &str {
-    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
+    fn write_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
         if depth == 0 {
             write_escaped_string_quoted(self, w)
         } else {
@@ -94,13 +79,13 @@ impl Literal for &str {
 }
 
 impl Literal for String {
-    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
-        self.as_str().collect_literal(w, depth)
+    fn write_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
+        self.as_str().write_literal(w, depth)
     }
 }
 
 impl<T: Literal> Literal for &[T] {
-    fn collect_literal(&self, mut w: &mut dyn Write, depth: usize) -> fmt::Result {
+    fn write_literal(&self, mut w: &mut dyn Write, depth: usize) -> fmt::Result {
         if depth == 0 {
             w.write_str("'")?;
         }
@@ -112,7 +97,7 @@ impl<T: Literal> Literal for &[T] {
                 w.write_str(", ")?;
             }
 
-            lit.collect_literal(&mut w, depth + 1)?
+            lit.write_literal(&mut w, depth + 1)?
         }
 
         w.write_str("}")?;
@@ -125,37 +110,16 @@ impl<T: Literal> Literal for &[T] {
 }
 
 impl<T: Literal> Literal for Vec<T> {
-    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
-        self.as_slice().collect_literal(w, depth)
+    fn write_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
+        self.as_slice().write_literal(w, depth)
     }
 }
 
 impl<T: Literal, const N: usize> Literal for [T; N] {
-    fn collect_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
-        self.as_slice().collect_literal(w, depth)
+    fn write_literal(&self, w: &mut dyn Write, depth: usize) -> fmt::Result {
+        self.as_slice().write_literal(w, depth)
     }
 }
-
-use std::fmt;
-impl<T: Literal> fmt::Display for Lit<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.collect_literal(f, 0)
-    }
-}
-
-macro_rules! impl_lit_binary_ops {
-    ($expr:ident => $($op_trait:ident::$op:ident),*) => {$(
-        impl<T: Literal, E> std::ops::$op_trait<E> for Lit<T> {
-            type Output = $expr<Self, E>;
-
-            fn $op(self, rhs: E) -> Self::Output {
-                <Self as BinaryExt>::$op(self, rhs)
-            }
-        }
-    )*};
-}
-
-impl_lit_binary_ops!(BinaryExpr => Add::add, Sub::sub, Mul::mul, Div::div, Rem::rem, BitAnd::bitand, BitOr::bitor, BitXor::bitxor);
 
 macro_rules! impl_literal {
     ($(($($t:ident),*)),*) => {
@@ -163,7 +127,7 @@ macro_rules! impl_literal {
             impl<$($t: private::Sealed),*> private::Sealed for ($($t,)*) {}
             impl<$($t: Literal),*> Literal for ($($t,)*) {
                 #[allow(non_snake_case)]
-                fn collect_literal(&self, mut w: &mut dyn Write, depth: usize) -> fmt::Result {
+                fn write_literal(&self, mut w: &mut dyn Write, depth: usize) -> fmt::Result {
                     if depth == 0 {
                         w.write_str("'")?;
                     }
@@ -180,7 +144,7 @@ macro_rules! impl_literal {
                             }
                             __thorn_inc += 1;
 
-                            $t.collect_literal(&mut w, depth + 1)?;
+                            $t.write_literal(&mut w, depth + 1)?;
                         )*
                     }
 
@@ -213,17 +177,22 @@ impl_literal! {
     (A, B, C, D, E, F, G, H, I, J, K, L, M, N)
 }
 
+#[rustfmt::skip]
 fn escape_string(string: &str) -> String {
-    string
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\'', "\\'")
-        .replace('\0', "\\0")
-        .replace('\x08', "\\b")
-        .replace('\x09', "\\t")
-        .replace('\x1a', "\\z")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
+    let mut out = String::with_capacity(string.len());
+
+    const FIND: &[char] =    &['\\',   '"',    '\'',  '\0',  '\x08', '\x09', '\x1a', '\n',  '\r'];
+    const REPLACE: &[&str] = &["\\\\", "\\\"", "\\'", "\\0", "\\b",  "\\t",  "\\z",  "\\n", "\\r"];
+
+    for c in string.chars() {
+        if let Some(i) = FIND.iter().position(|&f| f == c) {
+            out.push_str(REPLACE[i]);
+        } else {
+            out.push(c);
+        }
+    }
+
+    out
 }
 
 pub(crate) fn write_escaped_string_quoted(string: &str, mut w: impl Write) -> fmt::Result {

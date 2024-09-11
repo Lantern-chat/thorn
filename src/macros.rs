@@ -38,6 +38,7 @@ pub struct StaticQuery<E: RowColumns> {
 }
 
 impl<E: RowColumns> From<Query<'_, E>> for StaticQuery<E> {
+    #[inline(always)]
     fn from(q: Query<'_, E>) -> Self {
         StaticQuery {
             q: q.q,
@@ -60,8 +61,9 @@ impl<E: RowColumns> Default for Query<'_, E> {
 
 use crate::{
     func::Func,
+    literal::Literal,
+    name::Schema,
     table::{Column, Table, TableExt},
-    Literal,
 };
 use std::{
     collections::hash_map::{Entry, HashMap},
@@ -96,11 +98,13 @@ impl<E: RowColumns> Write for Query<'_, E> {
 
 #[allow(clippy::single_char_add_str)]
 impl<'a, E: RowColumns> Query<'a, E> {
+    #[inline(always)]
     pub fn inner(&mut self) -> &mut String {
         &mut self.q
     }
 
     #[doc(hidden)]
+    #[inline(always)]
     pub fn __from_cached(cached: &'static StaticQuery<E>, params: Vec<&'a (dyn pg::ToSql + Sync)>) -> Self {
         Query {
             params,
@@ -153,7 +157,7 @@ impl<'a, E: RowColumns> Query<'a, E> {
 
     #[inline(always)]
     pub fn write_literal<L: Literal>(&mut self, lit: L) -> fmt::Result {
-        lit.collect_literal(self.inner(), 0)
+        lit.write_literal(self.inner(), 0)
     }
 
     #[inline(always)]
@@ -173,7 +177,12 @@ impl<'a, E: RowColumns> Query<'a, E> {
 
     #[inline]
     pub fn write_table<T: Table>(&mut self) -> fmt::Result {
-        crate::query::from_item::__write_table::<T>(self)
+        match (T::ALIAS, T::SCHEMA) {
+            (None, Schema::None) => write!(self, "\"{}\"", T::NAME.name()),
+            (None, Schema::Named(name)) => write!(self, "\"{}\".\"{}\"", name, T::NAME.name()),
+            (Some(alias), Schema::None) => write!(self, "\"{}\" AS {alias}", T::NAME.name()),
+            (Some(alias), Schema::Named(name)) => write!(self, "\"{}\".\"{}\" AS {alias}", name, T::NAME.name()),
+        }
     }
 
     pub fn write_column_name<C: Column>(&mut self, col: C) -> fmt::Result {

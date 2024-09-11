@@ -1,8 +1,6 @@
-use crate::Collectable;
-
 use super::name::{Name, Schema};
 
-pub trait EnumType: Collectable + Clone + Copy + Sized + 'static {
+pub trait EnumType: Clone + Copy + Sized + 'static {
     const NAME: Name;
     const SCHEMA: Schema;
 
@@ -100,25 +98,6 @@ macro_rules! enums {
                 match *self {
                     $($name::$variant => stringify!([<$variant:snake>])),*
                 }
-            }
-        }
-
-        impl $crate::collect::Collectable for $name {
-            fn collect(&self, w: &mut dyn std::fmt::Write, _: &mut $crate::collect::Collector) -> std::fmt::Result {
-                use $crate::enums::EnumType;
-
-                write!(w, "'{}'::{}", match *self {
-                    $( $name::$variant => stringify!([< $variant:snake >]) ),*
-                }, Self::full_name())
-            }
-        }
-
-        impl $crate::Expr for $name {}
-        impl $crate::ValueExpr for $name {}
-
-        impl $crate::Arguments for $name {
-            fn to_vec(self) -> Vec<Box<dyn $crate::Expr>> {
-                vec![Box::new(self)]
             }
         }
     )*}}

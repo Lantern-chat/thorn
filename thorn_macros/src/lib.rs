@@ -226,7 +226,7 @@ impl State {
     fn flush(&mut self, out: &mut TokenStream2) {
         if !self.buffer.is_empty() {
             let mut buffer = std::mem::take(&mut self.buffer);
-            if !(buffer.ends_with(&[' ', '(', '[']) || buffer.ends_with("::")) {
+            if !(buffer.ends_with([' ', '(', '[']) || buffer.ends_with("::")) {
                 buffer.push_str(" ");
             }
             let writer = &self.writer;
