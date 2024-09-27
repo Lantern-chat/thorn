@@ -1,23 +1,22 @@
-#![cfg(feature = "print_schema")]
-
-/// Print Schema
-#[derive(argh::FromArgs)]
-pub struct Arguments {
-    /// database connection string for PostgreSQL
-    #[argh(option, short = 'd')]
-    db: String,
-
-    /// where to store generated schema file
-    #[argh(option, short = 'o')]
-    out: Option<std::path::PathBuf>,
-
-    /// specific database schema to use
-    #[argh(option, short = 's')]
-    schema: Option<String>,
-}
-
+#[cfg(feature = "print_schema")]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    /// Print Schema
+    #[derive(argh::FromArgs)]
+    pub struct Arguments {
+        /// database connection string for PostgreSQL
+        #[argh(option, short = 'd')]
+        db: String,
+
+        /// where to store generated schema file
+        #[argh(option, short = 'o')]
+        out: Option<std::path::PathBuf>,
+
+        /// specific database schema to use
+        #[argh(option, short = 's')]
+        schema: Option<String>,
+    }
+
     let args: Arguments = argh::from_env();
 
     let (client, connection) = tokio_postgres::connect(&args.db, tokio_postgres::NoTls).await?;
@@ -46,4 +45,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(not(feature = "print_schema"))]
+fn main() {
+    eprintln!("This binary was compiled without the `print_schema` feature enabled.");
+    eprintln!("Please enable the `print_schema` feature in your `Cargo.toml` to use this binary.");
+    std::process::exit(1);
 }
