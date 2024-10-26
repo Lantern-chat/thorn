@@ -19,6 +19,7 @@ fn do_parse(input: ParseStream) -> syn::Result<TokenStream2> {
     let writer = Ident::new("__thorn_query", Span::call_site());
 
     let mut state = State {
+        krate: krate.clone(),
         writer: writer.clone(),
         ident: Default::default(),
         buffer: Default::default(),
@@ -163,6 +164,7 @@ impl IdentBuffer {
 }
 
 struct State {
+    krate: Ident,
     writer: Ident,
     ident: IdentBuffer,
     buffer: String,
@@ -705,6 +707,15 @@ impl State {
                 {
                     self.flush(out);
                     parse_for(input, self)?.to_tokens(out, self);
+                }
+
+                _ if input.peek(Token![struct]) => {
+                    let table = input.parse::<syn::ItemStruct>()?;
+                    let krate = &self.krate;
+
+                    out.extend(quote::quote! {
+                        #krate::tables! { #table }
+                    });
                 }
 
                 _ if is_macro(input) => {

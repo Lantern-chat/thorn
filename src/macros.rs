@@ -217,7 +217,7 @@ impl<'a, E: RowColumns> Query<'a, E> {
 #[macro_export]
 macro_rules! sql {
     ($($tt:tt)*) => {{
-        #[allow(clippy::redundant_closure_call, unreachable_code, unused_braces)]
+        #[allow(clippy::redundant_closure_call, unreachable_code, unused_braces, non_local_definitions)]
         (|| -> Result<_, $crate::macros::SqlFormatError> {
             use std::fmt::Write;
             use $crate::*;

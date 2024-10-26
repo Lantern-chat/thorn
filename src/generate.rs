@@ -337,6 +337,9 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
                 enum_.oid
             )?;
 
+            // This isn't strictly necessary, but it's kind of a pointless rule for SQL enums
+            out.push_str("    #[allow(clippy::enum_variant_names)]\n");
+
             match schema_name {
                 Some(ref name) => writeln!(out, "    pub enum {enum_name} in {name} {{")?,
                 None => writeln!(out, "    pub enum {enum_name} {{")?,

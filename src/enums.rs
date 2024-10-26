@@ -104,6 +104,7 @@ macro_rules! enums {
 }
 
 enums! {
+    #[allow(clippy::enum_variant_names)]
     pub enum TestEnum as "testing_enum" in TestSchema {
         Test
     }
