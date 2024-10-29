@@ -105,6 +105,8 @@ struct Table<'a> {
 
 use crate::{table::SchemaColumns, *};
 
+const COMMENT_WIDTH: usize = 70;
+
 pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<String, Error> {
     #[rustfmt::skip]
     let columns_rows = client.query2(sql! {
@@ -174,6 +176,9 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
     let mut tables = HashMap::new();
     let mut enums = HashMap::new();
     let mut procs = Vec::new();
+
+    let mut uses_nullable = false;
+    let mut uses_type = false;
 
     for row in &columns_rows {
         let table_name: &str = row.table_name()?;
@@ -273,7 +278,7 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
         for proc in procs {
             if let Some(comment) = proc.comment {
-                for line in textwrap::wrap(comment, 70) {
+                for line in textwrap::wrap(comment, COMMENT_WIDTH) {
                     writeln!(out, "    /// {line}")?;
                 }
             }
@@ -282,7 +287,11 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
             for (idx, (arg, &ty)) in proc.argnames.iter().zip(&proc.argtypes).enumerate() {
                 let ty = match Type::from_oid(ty) {
-                    Some(ty) => Some(PType(ty).to_string()),
+                    Some(ty) => {
+                        uses_type = true;
+
+                        Some(PType(ty).to_string())
+                    }
                     None => match enums.iter().find(|e| e.oid == ty) {
                         Some(enum_) => Some(format!("{}.clone()", enum_.name.to_shouty_snake_case())),
                         None => {
@@ -303,8 +312,8 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
             }
 
             match schema_name {
-                Some(ref schema_name) => writeln!(out, ") in {schema_name};\n")?,
-                None => writeln!(out, ");\n")?,
+                Some(ref schema_name) => writeln!(out, ") in {schema_name};")?,
+                None => writeln!(out, ");")?,
             }
         }
 
@@ -323,16 +332,18 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
         for enum_ in &mut enums {
             if let Some(comment) = enum_.comment {
-                for line in textwrap::wrap(comment, 70) {
+                for line in textwrap::wrap(comment, COMMENT_WIDTH) {
                     writeln!(out, "    /// {line}")?;
                 }
             }
 
             let enum_name = enum_.name.to_upper_camel_case();
 
+            uses_type = true;
+
             writeln!(
                 lazy_statics,
-                "/// See [{enum_name}] for full documentation\n    pub static {}: std::sync::LazyLock<thorn::pg::Type> = std::sync::LazyLock::new(|| <{enum_name} as thorn::EnumType>::ty({}));",
+                "/// See [{enum_name}] for full documentation\npub static {}: std::sync::LazyLock<Type> = std::sync::LazyLock::new(|| <{enum_name} as thorn::EnumType>::ty({}));\n",
                 enum_.name.to_shouty_snake_case(),
                 enum_.oid
             )?;
@@ -370,7 +381,7 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
         for mut table in tables {
             if let Some(comment) = table.comment {
-                for line in textwrap::wrap(comment, 70) {
+                for line in textwrap::wrap(comment, COMMENT_WIDTH) {
                     writeln!(out, "    /// {line}")?;
                 }
             }
@@ -385,7 +396,10 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
             for col in &table.cols {
                 let ty = match Type::from_oid(col.ty) {
-                    Some(ty) => PType(ty).to_string(),
+                    Some(ty) => {
+                        uses_type = true;
+                        PType(ty).to_string()
+                    }
                     None => match enums.iter().find(|e| e.oid == col.ty) {
                         Some(enum_) => format!("{}.clone()", enum_.name.to_shouty_snake_case()),
                         None => {
@@ -407,7 +421,9 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
                 }
 
                 if col.null {
-                    writeln!(out, "        {column_name}: thorn::table::Nullable({}),", ty)?;
+                    uses_nullable = true;
+
+                    writeln!(out, "        {column_name}: Nullable({}),", ty)?;
                 } else {
                     writeln!(out, "        {column_name}: {},", ty)?;
                 }
@@ -421,6 +437,14 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
 
     let mut out = String::new();
 
+    if uses_nullable {
+        out.push_str("use thorn::table::Nullable;\n\n");
+    }
+
+    if uses_type {
+        out.push_str("use thorn::pg::Type;\n\n");
+    }
+
     out += &out_funcs;
     out += &out_enums;
     out += &out_tables;
@@ -432,6 +456,6 @@ struct PType(pub Type);
 
 impl fmt::Display for PType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "thorn::pg::Type::{}", format!("{:?}", self.0).to_shouty_snake_case())
+        write!(f, "Type::{}", format!("{:?}", self.0).to_shouty_snake_case())
     }
 }
