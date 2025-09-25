@@ -9,13 +9,13 @@ proc-macro = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-indexmap = "1.9.3"
-phf = "0.11.1"
+indexmap = "2"
+phf = "0.13"
 proc-macro2 = "1.0.56"
 quote = "1.0.26"
 syn = { version = "2.0.15", features = ["full"] }
-heck = "0.4"
+heck = "0.5"
 
 [build-dependencies]
-phf = { version = "0.11.1", default-features = false }
-phf_codegen = "0.11.1"
+phf = { version = "0.13", default-features = false }
+phf_codegen = "0.13"

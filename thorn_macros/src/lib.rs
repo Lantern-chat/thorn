@@ -153,7 +153,7 @@ impl IdentBuffer {
         use std::fmt::Write;
 
         self.buffer.clear();
-        write!(self.buffer, "{}", ident).unwrap();
+        write!(self.buffer, "{ident}").unwrap();
         &self.buffer
     }
 
@@ -640,7 +640,7 @@ impl State {
                     let alias: Ident = input.parse()?;
 
                     // while in the LATERAL join, check for this name instead
-                    let old_cte = std::mem::replace(&mut self.cte, Some(alias.clone()));
+                    let old_cte = self.cte.replace(alias.clone());
 
                     // typical parenthesis
                     self.push_str("(");

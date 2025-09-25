@@ -237,15 +237,10 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
             Some(argnames) => argnames
                 .iter()
                 .enumerate()
-                .map(
-                    |(i, name)| {
-                        if name.is_empty() {
-                            Cow::Owned(format!("__arg{i}"))
-                        } else {
-                            Cow::Borrowed(*name)
-                        }
-                    },
-                )
+                .map(|(i, &name)| match name.is_empty() {
+                    true => Cow::Owned(format!("__arg{i}")),
+                    false => Cow::Borrowed(name),
+                })
                 .collect(),
             None => argtypes.iter().enumerate().map(|(i, _)| Cow::Owned(format!("__arg{i}"))).collect(),
         };
@@ -435,7 +430,9 @@ pub async fn generate(client: &pgt::Client, schema: Option<String>) -> Result<St
         out.push_str("}\n");
     }
 
-    let mut out = String::new();
+    let mut out = String::with_capacity(out_funcs.len() + out_enums.len() + out_tables.len() + 256);
+
+    out.push_str("#![rustfmt::skip]\n");
 
     if uses_nullable {
         out.push_str("use thorn::table::Nullable;\n\n");

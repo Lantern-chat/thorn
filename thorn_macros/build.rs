@@ -10,6 +10,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut keywords = phf_codegen::Set::new();
 
+    println!("cargo:rerun-if-changed=keywords.txt");
+
     for keyword in include_str!("./keywords.txt").split_whitespace() {
         keywords.entry(keyword);
     }
